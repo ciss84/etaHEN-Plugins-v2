@@ -176,7 +176,7 @@ namespace offsets {
             case V700: case V701: case V720: case V740: case V760: case V761:
                 return 0x0AC8064 + 0x24;
             case V800: case V820: case V840: case V860:
-                return 0x0AC3064 + 0x24;
+                return 0x0AC3088;
             case V900:
                 return 0x0D72064 + 0x24;
             case V905: case V920: case V940: case V960:
@@ -206,7 +206,7 @@ namespace offsets {
             case V700: case V701: case V720: case V740: case V760: case V761:
                 return 0x0AC8064 + 0x8C;
             case V800: case V820: case V840: case V860:
-                return 0x0AC3064 + 0x8C;
+                return 0x0AC30F0;
             case V900:
                 return 0x0D72088; //0x0D72064 + 0x8C
             case V905: case V920: case V940: case V960:
