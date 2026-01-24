@@ -128,12 +128,7 @@ int main()
 
 		// Attach hijacker
 		plugin_log("Attaching to process...");
-		auto executable = Hijacker::Create(pid);
-		if (!executable)
-		{
-			plugin_log("Failed to create Hijacker");
-			continue;
-		}
+		auto executable = makeUnique<Hijacker>(pid);
 
 		uint64_t text_base = executable->getEboot()->imagebase();
 		plugin_log("Process attached - text_base: 0x%llx", text_base);
@@ -149,7 +144,7 @@ int main()
 		{
 			plugin_log("Injecting: %s", prx.path.c_str());
 
-			if (HookGame(executable, text_base, prx.path.c_str(), prx.frame_delay))
+			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
 			{
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
 						   prx.path.c_str(), prx.frame_delay);
