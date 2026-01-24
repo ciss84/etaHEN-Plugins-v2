@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stddef.h>
 #include <stdio.h>
 #include <sys/_pthreadtypes.h>
@@ -13,5 +15,14 @@
 #include "hijacker/hijacker.hpp"
 #include "notify.hpp"
 #include "backtrace.hpp"
+#include <map>
+#include <string>
+
+struct GameConfig {
+    int delay = 30;
+    int extra_frames = 0;
+    std::map<std::string, bool> prx_files;
+};
 
 void plugin_log(const char* fmt, ...);
+GameConfig parse_config_for_tid(const char* tid);

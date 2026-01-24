@@ -20,7 +20,7 @@ extern const unsigned int elf_size;
 
 void sig_handler(int signo)
 {
-	printf_notification("the error disabler plugin has crashed with signal %d\nif you need it you can relaunch via the etaHEN toolbox in debug settings", signo);
+	printf_notification("the injector plugin has crashed with signal %d\nif you need it you can relaunch via the etaHEN toolbox in debug settings", signo);
 	printBacktraceForCrash();
 	exit(-1);
 }
@@ -145,66 +145,128 @@ int send_injector_data(const char *ip, int port,
 		return -1;
 	}
 
-	plugin_log("Sent %zu bytes to %s:%d\n", MAX_PROC_NAME + data_size, ip, port);
+	plugin_log("Sent %zu bytes to %s:%d", MAX_PROC_NAME + data_size, ip, port);
 
 	close(sock);
 	return 0;
 }
 
-void send_all_payloads(){
+void send_all_payloads_legacy()
+{
 	const char* dir_path = "/data/InjectorPlugin";
 	DIR* dir = opendir(dir_path);
-    if (!dir) {
-        plugin_log("Cannot open directory: %s\n", dir_path);
-        return;
-    }
+	if (!dir) {
+		plugin_log("Cannot open directory: %s", dir_path);
+		return;
+	}
 
 	// Detect console IP address
 	char console_ip[64];
 	get_console_ip(console_ip, sizeof(console_ip));
 
-    struct dirent* entry;
+	struct dirent* entry;
 
-    while ((entry = readdir(dir)) != NULL) {
+	while ((entry = readdir(dir)) != NULL) {
 
-        if (strcmp(entry->d_name, ".") == 0 ||
-            strcmp(entry->d_name, "..") == 0)
-            continue;
+		if (strcmp(entry->d_name, ".") == 0 ||
+			strcmp(entry->d_name, "..") == 0)
+			continue;
 
-        char fullpath[512];
-        snprintf(fullpath, sizeof(fullpath), "%s/%s", dir_path, entry->d_name);
+		char fullpath[512];
+		snprintf(fullpath, sizeof(fullpath), "%s/%s", dir_path, entry->d_name);
 
-        struct stat st;
-        if (stat(fullpath, &st) < 0 || !S_ISREG(st.st_mode))
-            continue;
+		struct stat st;
+		if (stat(fullpath, &st) < 0 || !S_ISREG(st.st_mode))
+			continue;
 
-        plugin_log("Sending payload: %s (%lld bytes)\n",
-               fullpath, (long long)st.st_size);
+		// Skip config.ini
+		if (strcmp(entry->d_name, "config.ini") == 0)
+			continue;
 
-        FILE* f = fopen(fullpath, "rb");
-        if (!f) {
-            plugin_log("Cannot open file: %s\n", fullpath);
-            continue;
-        }
+		plugin_log("Sending payload: %s (%lld bytes)",
+			   fullpath, (long long)st.st_size);
 
-        uint8_t* buf = (uint8_t*)malloc(st.st_size);
-        fread(buf, 1, st.st_size, f);
-        fclose(f);
+		FILE* f = fopen(fullpath, "rb");
+		if (!f) {
+			plugin_log("Cannot open file: %s", fullpath);
+			continue;
+		}
 
-        send_injector_data(console_ip, 9021, "eboot.bin",  buf, st.st_size);
+		uint8_t* buf = (uint8_t*)malloc(st.st_size);
+		fread(buf, 1, st.st_size, f);
+		fclose(f);
 
-        free(buf);
+		send_injector_data(console_ip, 9021, "eboot.bin", buf, st.st_size);
+
+		free(buf);
 		sleep(1);
-    }
+	}
 
-    closedir(dir);
+	closedir(dir);
+}
+
+void send_all_payloads(const char* tid)
+{
+	// Load config for this game
+	GameConfig config = parse_config_for_tid(tid);
+	
+	if (config.prx_files.empty())
+	{
+		plugin_log("No PRX files configured for %s, using directory scan", tid);
+		// Fallback to legacy system (scan directory)
+		send_all_payloads_legacy();
+		return;
+	}
+	
+	// Detect console IP
+	char console_ip[64];
+	get_console_ip(console_ip, sizeof(console_ip));
+	
+	// Inject only enabled PRX from config
+	for (const auto& entry : config.prx_files)
+	{
+		const std::string& prx_path = entry.first;
+		bool enabled = entry.second;
+		
+		if (!enabled)
+		{
+			plugin_log("Skipping disabled PRX: %s", prx_path.c_str());
+			continue;
+		}
+		
+		struct stat st;
+		if (stat(prx_path.c_str(), &st) < 0 || !S_ISREG(st.st_mode))
+		{
+			plugin_log("PRX file not found or invalid: %s", prx_path.c_str());
+			continue;
+		}
+		
+		plugin_log("Injecting: %s (%lld bytes)", prx_path.c_str(), (long long)st.st_size);
+		
+		FILE* f = fopen(prx_path.c_str(), "rb");
+		if (!f)
+		{
+			plugin_log("Cannot open: %s", prx_path.c_str());
+			continue;
+		}
+		
+		uint8_t* buf = (uint8_t*)malloc(st.st_size);
+		fread(buf, 1, st.st_size, f);
+		fclose(f);
+		
+		send_injector_data(console_ip, 9021, "eboot.bin", buf, st.st_size);
+		
+		free(buf);
+		sleep(1);
+	}
 }
 
 uintptr_t kernel_base = 0;
+
 int main()
 {
 	// Premier log AVANT tout pour confirmer le demarrage
-	plugin_log("=== PLUGIN INJECTOR STARTING ===\n");
+	plugin_log("=== PLUGIN INJECTOR STARTING ===");
 	
 	payload_args_t *args = payload_get_args();
 	kernel_base = args->kdata_base_addr;
@@ -222,6 +284,7 @@ int main()
 
 	std::string tid;
 	int bappid, last_bappid = -1;
+	
 	while (true)
 	{
 		if (!Get_Running_App_TID(tid, bappid))
@@ -234,24 +297,50 @@ int main()
 
 		if ((bappid != last_bappid) && (tid.rfind("CUSA") != std::string::npos || tid.rfind("SCUS") != std::string::npos || tid.rfind("PPSA") != std::string::npos))
 		{
-			plugin_log("Game detected! TID: %s - Injecting in 10 seconds...", tid.c_str());
-			sleep(10);
+			// Load config to get delay and extra frames
+			GameConfig config = parse_config_for_tid(tid.c_str());
+			
+			plugin_log("Game detected! TID: %s - Waiting %d sec + %d frames...", 
+					   tid.c_str(), config.delay, config.extra_frames);
+			
+			// Wait for game to load
+			sleep(config.delay);
+			
+			// Wait extra frames for renderer init (60 frames = ~1 sec at 60fps)
+			if (config.extra_frames > 0)
+			{
+				int extra_delay = config.extra_frames / 60; // Convert frames to seconds
+				if (extra_delay < 1) extra_delay = 1;
+				
+				plugin_log("Waiting %d extra frames (~%d sec) for renderer init...", 
+						   config.extra_frames, extra_delay);
+				sleep(extra_delay);
+			}
+			
 			int bappid_tmp;
 			if (!Get_Running_App_TID(tid, bappid_tmp))
 			{
 				plugin_log("App closed before injection");
+				last_bappid = -1;
 				continue;
 			}
+			
 			plugin_log("Starting injection now...");
+			
 			if (bappid == bappid_tmp)
 			{
-				send_all_payloads();
+				send_all_payloads(tid.c_str());
 				last_bappid = bappid;
 				plugin_log("Injection completed for TID: %s", tid.c_str());
-			} else {
+				printf_notification("PRX injected into %s", tid.c_str());
+			}
+			else
+			{
 				plugin_log("App ID changed during wait - maybe app closed");
+				last_bappid = -1;
 			}
 		}
+		
 		sleep(5);
 	}
 
