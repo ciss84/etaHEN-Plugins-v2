@@ -12,7 +12,7 @@ struct OrbisKernelSwVersion {
     uint64_t pad1;
 };
 
-#define SOCK_LOG(sock, format, ...)                                          \
+#define //SOCK_LOG(sock, format, ...)                                          \
 {                                                                            \
     char _macro_printfbuf[512];                                              \
     int _macro_size = sprintf(_macro_printfbuf, format, ##__VA_ARGS__);      \

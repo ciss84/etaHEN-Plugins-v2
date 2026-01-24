@@ -357,6 +357,19 @@ typedef enum {
     EventType_ControllerFocusEnd
 } EventType;
 
+// Define AppType enum
+typedef enum {
+    AppType_Invalid = -1,
+    AppType_Unknown,
+    AppType_ShellUI,
+    AppType_Daemon,
+    AppType_CDLG,
+    AppType_MiniApp,
+    AppType_BigApp,
+    AppType_ShellCore,
+    AppType_ShellApp
+} AppType;
+
 // Define AppAttr enum
 typedef enum {
     AppAttr_None = 0,
