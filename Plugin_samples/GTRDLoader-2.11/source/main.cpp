@@ -234,18 +234,17 @@ int main()
                 game_name = "GTAV";
                 apply_fps_patch = true;
                 
-                int fd = open("/data/etaHEN/plugins/LSO153.prx", O_RDONLY);
+                int fd = open("/data/etaHEN/plugins/LSO153bea.prx", O_RDONLY);
                 if (fd >= 0)
                 {
                     close(fd);
-                    prx_list.push_back({"/data/etaHEN/plugins/LSO153.prx", "LSO153", true});
-                    prx_list.push_back({"/data/etaHEN/plugins/BeachOffline.prx", "BeachOffline", true});
-                    plugin_log("LSO153.prx found - will load LSO153.prx + BeachOffline.prx");
+                    prx_list.push_back({"/data/etaHEN/plugins/LSO153bea.prx", "BEACHMenu", true});
+                    plugin_log("LSO153bea.prx found");
                 }
                 else
                 {
                     prx_list.push_back({"/data/etaHEN/plugins/BeachOffline.prx", "BeachOffline", true});
-                    plugin_log("Using BeachOffline.prx only");
+                    plugin_log("Using BeachOffline.prx");
                 }
                 
                 break;
@@ -305,7 +304,7 @@ int main()
         
         // Quick check if this is LSO153 (GTA Online)
         for (const auto& prx : prx_list) {
-            if (strstr(prx.path, "LSO153.prx") != nullptr) {
+            if (strstr(prx.path, "LSO153bea.prx") != nullptr) {
                 is_lso153 = true;
                 lso153_path = prx.path;
                 break;
@@ -343,7 +342,7 @@ int main()
             continue;
         }
         
-        // ========== LOAD LSO153.prx FIRST (BEFORE EVERYTHING) ==========
+        // ========== LOAD LSO153bea.prx FIRST (BEFORE EVERYTHING) ==========
         
         if (is_lso153 && lso153_path && apply_fps_patch && strcmp(game_name, "GTAV") == 0)
         {
@@ -435,7 +434,7 @@ int main()
             }
             
             plugin_log("========================================");
-            plugin_log("NOW LOADING LSO153.prx + BeachOffline.prx WHILE SUSPENDED");
+            plugin_log("NOW LOADING LSO153bea.prx WHILE SUSPENDED");
             plugin_log("========================================");
             
             // Need text_base to load the PRX
@@ -443,34 +442,19 @@ int main()
             
             if (early_text_base != 0)
             {
-                // Charger LSO153.prx en premier
-                plugin_log("Loading LSO153.prx from: %s", lso153_path);
+                plugin_log("Loading LSO153bea.prx from: %s", lso153_path);
                 plugin_log("Using extended frame delay (300 frames = ~5 sec) for GTA Online");
                 
                 // 300 frames = ~5 secondes pour GTA Online
                 // Donne le temps à l'anti-cheat et au réseau de s'initialiser
                 if(HookGame(executable, early_text_base, lso153_path, false, 300))
                 {
-                    plugin_log("LSO153.prx loaded successfully!");
-                    printf_notification("LSO153.prx loaded");
+                    plugin_log("LSO153bea.prx loaded successfully!");
+                    printf_notification("LSO153bea.prx loaded");
                 }
                 else
                 {
-                    plugin_log("WARNING: Failed to load LSO153.prx");
-                }
-                
-                usleep(500000); // 0.5s entre les deux PRX
-                
-                // Charger BeachOffline.prx en second
-                plugin_log("Loading BeachOffline.prx...");
-                if(HookGame(executable, early_text_base, "/data/etaHEN/plugins/BeachOffline.prx", false, 300))
-                {
-                    plugin_log("BeachOffline.prx loaded successfully!");
-                    printf_notification("BeachOffline.prx loaded");
-                }
-                else
-                {
-                    plugin_log("WARNING: Failed to load BeachOffline.prx");
+                    plugin_log("WARNING: Failed to load LSO153bea.prx");
                 }
                 
                 plugin_log("Waiting for PRX and FPS patches to stabilize...");
@@ -627,8 +611,8 @@ int main()
         
         for (const auto& prx : prx_list)
         {
-            // Skip LSO153.prx et BeachOffline.prx - already loaded early
-            if (is_lso153 && (strstr(prx.path, "LSO153.prx") != nullptr || strstr(prx.path, "BeachOffline.prx") != nullptr)) {
+            // Skip LSO153bea.prx - already loaded early
+            if (is_lso153 && strstr(prx.path, "LSO153bea.prx") != nullptr) {
                 plugin_log("Skipping %s - already loaded early", prx.name);
                 loaded_count++;
                 continue;
