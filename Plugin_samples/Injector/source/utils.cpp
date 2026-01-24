@@ -1,18 +1,14 @@
 #include "utils.hpp"
+#include <cstdio>
 #include <cstring>
 #include <nid.hpp>
 #include <fcntl.h>
 #include <string>
-#include <sys/sysctl.h>
-#include <fstream>
-#include <sstream>
-
-extern "C" int sceKernelGetProcessName(int pid, char *out);
 
 void write_log(const char* text)
 {
 	int text_len = strlen(text);
-	int fd = open("/data/etaHEN/injector_plugin.log", O_WRONLY | O_CREAT | O_APPEND, 0777);
+	int fd = open("/data/etaHEN/plloader_plugin.log", O_WRONLY | O_CREAT | O_APPEND, 0777);
 	if (fd < 0)
 	{
 		return;
@@ -29,98 +25,109 @@ void plugin_log(const char* fmt, ...)
 	int msg_len = vsnprintf(msg, sizeof(msg), fmt, args);
 	va_end(args);
 
-	// Append newline at the end
-	if (msg[msg_len-1] == '\n')
+	if (msg_len > 0 && msg[msg_len-1] == '\n')
 	{
 		write_log(msg);
 	}
 	else
 	{
-		strcat(msg, "\n");
-		write_log(msg);
+	     strcat(msg, "\n");
+	     write_log(msg);
 	}
 }
 
-GameConfig parse_config_for_tid(const char* tid)
+extern "C" int sceSystemServiceGetAppIdOfRunningBigApp();
+extern "C" int sceSystemServiceGetAppTitleId(int app_id, char* title_id);
+
+bool Is_Game_Running(int &BigAppid, const char* title_id)
 {
-	GameConfig config;
-	config.delay = 30; // Default
-	config.extra_frames = 0;
-	
-	std::ifstream file("/data/InjectorPlugin/config.ini");
-	if (!file.is_open())
+	char tid[256]{};
+	BigAppid = sceSystemServiceGetAppIdOfRunningBigApp();
+	if (BigAppid < 0)
 	{
-		plugin_log("No config.ini found, using defaults");
-		return config;
+		return false;
 	}
-	
-	std::string line;
-	std::string current_section = "";
-	bool in_target_section = false;
-	bool in_default_section = false;
-	
-	while (std::getline(file, line))
+
+	if (sceSystemServiceGetAppTitleId(BigAppid, &tid[0]) != 0)
 	{
-		// Trim whitespace
-		line.erase(0, line.find_first_not_of(" \t\r\n"));
-		line.erase(line.find_last_not_of(" \t\r\n") + 1);
-		
-		// Skip empty lines and comments
-		if (line.empty() || line[0] == ';' || line[0] == '#')
-			continue;
-		
-		// Section header
-		if (line[0] == '[' && line[line.length()-1] == ']')
-		{
-			current_section = line.substr(1, line.length()-2);
-			in_target_section = (current_section == tid);
-			in_default_section = (current_section == "default");
-			continue;
-		}
-		
-		// Parse key=value
-		if (in_target_section || in_default_section)
-		{
-			size_t eq_pos = line.find('=');
-			if (eq_pos != std::string::npos)
-			{
-				std::string key = line.substr(0, eq_pos);
-				std::string value = line.substr(eq_pos + 1);
-				
-				// Trim key and value
-				key.erase(0, key.find_first_not_of(" \t"));
-				key.erase(key.find_last_not_of(" \t") + 1);
-				value.erase(0, value.find_first_not_of(" \t"));
-				value.erase(value.find_last_not_of(" \t") + 1);
-				
-				if (key == "delay")
-				{
-					config.delay = std::stoi(value);
-				}
-				else if (key == "extra_frames")
-				{
-					config.extra_frames = std::stoi(value);
-				}
-				else if (key.rfind("/data/", 0) == 0) // Path to PRX
-				{
-					bool enabled = (value == "true" || value == "1");
-					// Section TID override default
-					if (in_target_section)
-					{
-						config.prx_files[key] = enabled;
-					}
-					else if (in_default_section && config.prx_files.find(key) == config.prx_files.end())
-					{
-						config.prx_files[key] = enabled;
-					}
-				}
-			}
-		}
+		return false;
 	}
-	
-	file.close();
-	plugin_log("Config loaded for %s - delay: %d sec, extra_frames: %d, PRX files: %zu", 
-			   tid, config.delay, config.extra_frames, config.prx_files.size());
-	
-	return config;
+
+	tid[255] = '\0';
+
+    if(std::string(tid) == std::string(title_id))
+	{
+	   plugin_log("%s is running, appid 0x%X", title_id, BigAppid);
+       return true;
+	}
+
+	return false;
+}
+
+bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay) 
+{
+  plugin_log("Patching Game Now (PRX: %s, Auto-load: %s, Frame delay: %d frames)", 
+             prx_path, auto_load ? "YES" : "NO", frame_delay);
+
+  GameBuilder builder = auto_load ? BUILDER_TEMPLATE_AUTO : BUILDER_TEMPLATE;
+  size_t shellcode_size = auto_load ? GameBuilder::SHELLCODE_SIZE_AUTO : GameBuilder::SHELLCODE_SIZE;
+  
+  plugin_log("Using shellcode size: %zu bytes (auto-load: %s)", 
+             shellcode_size, auto_load ? "YES with frame delay" : "NO");
+  
+  GameStuff stuff{*hijacker};
+
+  UniquePtr<SharedLib> lib = hijacker->getLib("libScePad.sprx");
+  plugin_log("libScePad.sprx addr: 0x%llx", lib->imagebase());
+  stuff.scePadReadState = hijacker->getFunctionAddress(lib.get(), nid::scePadReadState);
+
+  plugin_log("scePadReadState addr: 0x%llx", stuff.scePadReadState);
+  if (stuff.scePadReadState == 0) {
+    plugin_log("failed to locate scePadReadState");
+    return false;
+  }
+
+  stuff.ASLR_Base = alsr_b;
+  strncpy(stuff.prx_path, prx_path, sizeof(stuff.prx_path) - 1);
+  stuff.prx_path[sizeof(stuff.prx_path) - 1] = '\0';
+  stuff.frame_delay = frame_delay;
+  stuff.frame_counter = 0; // Reset counter
+  
+  plugin_log("GameStuff configured:");
+  plugin_log("  - prx_path: %s", stuff.prx_path);
+  plugin_log("  - frame_delay: %d frames (~%.1f seconds at 60fps)", 
+             frame_delay, frame_delay / 60.0f);
+  plugin_log("  - frame_counter: %d (initial)", stuff.frame_counter);
+
+  auto code = hijacker->getTextAllocator().allocate(shellcode_size);
+  plugin_log("shellcode addr: 0x%llx (size: %zu bytes)", code, shellcode_size);
+  auto stuffAddr = hijacker->getDataAllocator().allocate(sizeof(GameStuff));
+  plugin_log("GameStuff addr: 0x%llx (size: %zu bytes)", stuffAddr, sizeof(GameStuff));
+  
+  auto meta = hijacker->getEboot()->getMetaData();
+  const auto &plttab = meta->getPltTable();
+  auto index = meta->getSymbolTable().getSymbolIndex(nid::scePadReadState);
+  
+  for (const auto &plt : plttab) {
+    if (ELF64_R_SYM(plt.r_info) == index) {
+      builder.setExtraStuffAddr(stuffAddr);
+      
+      uint8_t shellcode_buffer[GameBuilder::SHELLCODE_SIZE];
+      memcpy(shellcode_buffer, builder.shellcode, shellcode_size);
+      
+      hijacker->write(code, shellcode_buffer);
+      hijacker->write(stuffAddr, stuff);
+
+      uintptr_t hook_adr = hijacker->getEboot()->imagebase() + plt.r_offset;
+
+      hijacker->write<uintptr_t>(hook_adr, code);
+      plugin_log("hook addr: 0x%llx", hook_adr);
+      plugin_log("PRX injection setup completed successfully!");
+
+      return true;
+    }
+  }
+  
+  plugin_log("Failed to find scePadReadState in PLT table");
+  return false;
 }
