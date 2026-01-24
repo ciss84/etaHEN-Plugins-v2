@@ -6,11 +6,11 @@
 
 cmake_minimum_required (VERSION 3.20)
 
-set(basename "GTRDLoader-2.10")
+set(basename "GTRDLoader-2.09")
 project(${basename} C CXX)
 
-set(PLUGIN_TITLE_ID "GTRD00010")
-set(PLUGIN_VERSION "2.10")
+set(PLUGIN_TITLE_ID "GTRD00009")
+set(PLUGIN_VERSION "2.09")
 
 ###################################################################################################
 # PS5DEBUG ACTIVATION - Décommentez la ligne ci-dessous pour DÉSACTIVER ps5debug

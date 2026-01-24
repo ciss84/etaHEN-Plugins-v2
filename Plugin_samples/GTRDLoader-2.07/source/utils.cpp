@@ -66,14 +66,12 @@ bool Is_Game_Running(int &BigAppid, const char* title_id)
 
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay) 
 {
-  plugin_log("Patching Game Now (PRX: %s, Auto-load: %s, Frame delay: %d frames)", 
-             prx_path, auto_load ? "YES" : "NO", frame_delay);
+  plugin_log("Patching Game Now (PRX: %s, Auto-load: %s, Frame delay: %d)", prx_path, auto_load ? "YES" : "NO", frame_delay);
 
   GameBuilder builder = auto_load ? BUILDER_TEMPLATE_AUTO : BUILDER_TEMPLATE;
   size_t shellcode_size = auto_load ? GameBuilder::SHELLCODE_SIZE_AUTO : GameBuilder::SHELLCODE_SIZE;
   
-  plugin_log("Using shellcode size: %zu bytes (auto-load: %s)", 
-             shellcode_size, auto_load ? "YES with frame delay" : "NO");
+  plugin_log("Using shellcode size: %zu bytes", shellcode_size);
   
   GameStuff stuff{*hijacker};
 
@@ -91,18 +89,10 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   strncpy(stuff.prx_path, prx_path, sizeof(stuff.prx_path) - 1);
   stuff.prx_path[sizeof(stuff.prx_path) - 1] = '\0';
   stuff.frame_delay = frame_delay;
-  stuff.frame_counter = 0; // Reset counter
-  
-  plugin_log("GameStuff configured:");
-  plugin_log("  - prx_path: %s", stuff.prx_path);
-  plugin_log("  - frame_delay: %d frames (~%.1f seconds at 60fps)", 
-             frame_delay, frame_delay / 60.0f);
-  plugin_log("  - frame_counter: %d (initial)", stuff.frame_counter);
 
   auto code = hijacker->getTextAllocator().allocate(shellcode_size);
   plugin_log("shellcode addr: 0x%llx (size: %zu bytes)", code, shellcode_size);
   auto stuffAddr = hijacker->getDataAllocator().allocate(sizeof(GameStuff));
-  plugin_log("GameStuff addr: 0x%llx (size: %zu bytes)", stuffAddr, sizeof(GameStuff));
   
   auto meta = hijacker->getEboot()->getMetaData();
   const auto &plttab = meta->getPltTable();
@@ -122,7 +112,6 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
 
       hijacker->write<uintptr_t>(hook_adr, code);
       plugin_log("hook addr: 0x%llx", hook_adr);
-      plugin_log("PRX injection setup completed successfully!");
 
       return true;
     }

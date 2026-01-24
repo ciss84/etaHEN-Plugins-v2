@@ -6,25 +6,9 @@
 #include <vector>
 #include <nid.hpp>
 
-extern "C" int sceKernelDebugOutText(int channel, const char *text);
-
 void sig_handler(int signo)
 {
-    static int already_crashed = 0;
-    
-    // Éviter les boucles infinies
-    if (already_crashed) {
-        _Exit(signo);
-    }
-    already_crashed = 1;
-    
-    // UNE SEULE notification simple
-    char msg[64];
-    snprintf(msg, sizeof(msg), "GTRDLoader v2.10 crash: signal %d", signo);
-    sceKernelDebugOutText(0, msg);
-    
-    // Exit immédiat
-    _Exit(signo);
+    printf_notification("GTRDLoader v2.06 crashed with signal %d", signo);
 }
 
 extern "C"{
@@ -195,7 +179,7 @@ uintptr_t kernel_base = 0;
 
 int main()
 {
-    plugin_log("GTRDLoader v2.10 Plugin entered");
+    plugin_log("GTRDLoader v2.06 Plugin entered");
     payload_args_t *args = payload_get_args();
     kernel_base = args->kdata_base_addr;
     
@@ -215,8 +199,8 @@ int main()
         sigaction(i, &new_SIG_action, NULL);
     
     unlink("/data/etaHEN/plloader_plugin.log");
-    printf_notification("GTRDLoader v2.10 Starting.");
-    plugin_log("GTRDLoader v2.10 Starting...");
+    printf_notification("GTRDLoader v2.06 Starting.");
+    plugin_log("GTRDLoader v2.06 Starting...");
     
     while(1)
     {
@@ -234,12 +218,12 @@ int main()
                 game_name = "GTAV";
                 apply_fps_patch = true;
                 
-                int fd = open("/data/LSO153bea.prx", O_RDONLY);
+                int fd = open("/data/LSO153exp.prx", O_RDONLY);
                 if (fd >= 0)
                 {
                     close(fd);
-                    prx_list.push_back({"/data/LSO153bea.prx", "BEACHMenu", true});
-                    plugin_log("LSO153bea.prx found");
+                    prx_list.push_back({"/data/LSO153exp.prx", "BEACHMenu", true});
+                    plugin_log("LSO153exp.prx found");
                 }
                 else
                 {
@@ -304,7 +288,7 @@ int main()
         
         // Quick check if this is LSO153 (GTA Online)
         for (const auto& prx : prx_list) {
-            if (strstr(prx.path, "LSO153bea.prx") != nullptr) {
+            if (strstr(prx.path, "LSO153exp.prx") != nullptr) {
                 is_lso153 = true;
                 lso153_path = prx.path;
                 break;
@@ -342,7 +326,7 @@ int main()
             continue;
         }
         
-        // ========== LOAD LSO153bea.prx FIRST (BEFORE EVERYTHING) ==========
+        // ========== LOAD LSO153exp.prx FIRST (BEFORE EVERYTHING) ==========
         
         if (is_lso153 && lso153_path && apply_fps_patch && strcmp(game_name, "GTAV") == 0)
         {
@@ -434,7 +418,7 @@ int main()
             }
             
             plugin_log("========================================");
-            plugin_log("NOW LOADING LSO153bea.prx WHILE SUSPENDED");
+            plugin_log("NOW LOADING LSO153exp.prx WHILE SUSPENDED");
             plugin_log("========================================");
             
             // Need text_base to load the PRX
@@ -442,19 +426,19 @@ int main()
             
             if (early_text_base != 0)
             {
-                plugin_log("Loading LSO153bea.prx from: %s", lso153_path);
+                plugin_log("Loading LSO153exp.prx from: %s", lso153_path);
                 plugin_log("Using extended frame delay (300 frames = ~5 sec) for GTA Online");
                 
                 // 300 frames = ~5 secondes pour GTA Online
                 // Donne le temps à l'anti-cheat et au réseau de s'initialiser
                 if(HookGame(executable, early_text_base, lso153_path, false, 300))
                 {
-                    plugin_log("LSO153bea.prx loaded successfully!");
-                    printf_notification("LSO153bea.prx loaded");
+                    plugin_log("LSO153exp.prx loaded successfully!");
+                    printf_notification("LSO153exp.prx loaded");
                 }
                 else
                 {
-                    plugin_log("WARNING: Failed to load LSO153bea.prx");
+                    plugin_log("WARNING: Failed to load LSO153exp.prx");
                 }
                 
                 plugin_log("Waiting for PRX and FPS patches to stabilize...");
@@ -611,8 +595,8 @@ int main()
         
         for (const auto& prx : prx_list)
         {
-            // Skip LSO153bea.prx - already loaded early
-            if (is_lso153 && strstr(prx.path, "LSO153bea.prx") != nullptr) {
+            // Skip LSO153exp.prx - already loaded early
+            if (is_lso153 && strstr(prx.path, "LSO153exp.prx") != nullptr) {
                 plugin_log("Skipping %s - already loaded early", prx.name);
                 loaded_count++;
                 continue;

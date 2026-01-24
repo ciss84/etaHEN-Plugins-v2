@@ -5,9 +5,11 @@
 #include <unistd.h>
 #include <vector>
 #include <nid.hpp>
+#include <sys/sysctl.h>
 
 extern "C" int sceKernelDebugOutText(int channel, const char *text);
 
+// Signal handler simple - une seule notification puis exit
 void sig_handler(int signo)
 {
     static int already_crashed = 0;
@@ -20,7 +22,7 @@ void sig_handler(int signo)
     
     // UNE SEULE notification simple
     char msg[64];
-    snprintf(msg, sizeof(msg), "GTRDLoader v2.11 crash: signal %d", signo);
+    snprintf(msg, sizeof(msg), "GTRDLoader v2.08 crash: signal %d", signo);
     sceKernelDebugOutText(0, msg);
     
     // Exit immédiat
@@ -32,6 +34,24 @@ extern "C"{
     int32_t sceKernelSuspendProcess(pid_t pid);
     int32_t sceKernelPrepareToResumeProcess(pid_t pid);
     int32_t sceKernelResumeProcess(pid_t pid);
+}
+
+// Variables globales
+uintptr_t kernel_base = 0;
+int g_firmware_version = 0;
+
+// Détecter firmware
+int get_firmware_version() {
+    int version[4] = {0, 0, 0, 0};
+    size_t len = sizeof(version);
+    
+    int result = sysctlbyname("kern.sdk_version", version, &len, NULL, 0);
+    
+    if (result == 0 && version[0] > 0) {
+        return version[0];
+    }
+    
+    return 0;
 }
 
 static void SuspendApp(pid_t pid)
@@ -191,11 +211,9 @@ struct PRXConfig {
     bool required;
 };
 
-uintptr_t kernel_base = 0;
-
 int main()
 {
-    plugin_log("GTRDLoader v2.11 Plugin entered");
+    plugin_log("GTRDLoader v2.08 Plugin entered");
     payload_args_t *args = payload_get_args();
     kernel_base = args->kdata_base_addr;
     
@@ -215,8 +233,18 @@ int main()
         sigaction(i, &new_SIG_action, NULL);
     
     unlink("/data/etaHEN/plloader_plugin.log");
-    printf_notification("GTRDLoader v2.11 Starting.");
-    plugin_log("GTRDLoader v2.11 Starting...");
+    printf_notification("GTRDLoader v2.08 Starting.");
+    plugin_log("GTRDLoader v2.08 Starting...");
+    
+    // Détecter firmware
+    g_firmware_version = get_firmware_version();
+    plugin_log("Firmware: 0x%08X", g_firmware_version);
+    
+    if (g_firmware_version >= 0x09000000) {
+        plugin_log("FW 9.00+ - FPS patches DISABLED");
+    } else {
+        plugin_log("FW < 9.00 - FPS patches ENABLED");
+    }
     
     while(1)
     {
@@ -232,18 +260,18 @@ int main()
                 Is_Game_Running(appid, "CUSA00419"))   // PS4 EU
             {
                 game_name = "GTAV";
-                apply_fps_patch = true;
+                apply_fps_patch = (g_firmware_version < 0x09000000);
                 
-                int fd = open("/data/etaHEN/plugins/LSO153bea.prx", O_RDONLY);
+                int fd = open("/data/LSO153bea.prx", O_RDONLY);
                 if (fd >= 0)
                 {
                     close(fd);
-                    prx_list.push_back({"/data/etaHEN/plugins/LSO153bea.prx", "BEACHMenu", true});
+                    prx_list.push_back({"/data/LSO153bea.prx", "LSO153bea", true});
                     plugin_log("LSO153bea.prx found");
                 }
                 else
                 {
-                    prx_list.push_back({"/data/etaHEN/plugins/BeachOffline.prx", "BeachOffline", true});
+                    prx_list.push_back({"/data/BeachOffline.prx", "BeachOffline", true});
                     plugin_log("Using BeachOffline.prx");
                 }
                 
@@ -255,8 +283,8 @@ int main()
                 Is_Game_Running(appid, "CUSA08519"))   // PS4 EU
             {
                 game_name = "RDR2";
-                apply_fps_patch = true;
-                prx_list.push_back({"/data/etaHEN/plugins/Sheriff.prx", "Sheriff", true});
+                apply_fps_patch = (g_firmware_version < 0x09000000);
+                prx_list.push_back({"/data/Sheriff.prx", "Sheriff", true});
                 
                 break;
             }
