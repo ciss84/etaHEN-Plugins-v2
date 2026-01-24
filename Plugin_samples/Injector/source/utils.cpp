@@ -4,6 +4,8 @@
 #include <nid.hpp>
 #include <fcntl.h>
 #include <string>
+#include <fstream>
+#include <sstream>
 
 void write_log(const char* text)
 {
@@ -130,4 +132,139 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   
   plugin_log("Failed to find scePadReadState in PLT table");
   return false;
+}
+
+GameConfig parse_config_for_tid(const char* tid)
+{
+	GameConfig config;
+	config.default_frame_delay = 300; // Default
+	config.apply_fps_patch = false;
+	
+	std::ifstream file("/data/etaHEN/gtrdloader_config.ini");
+	if (!file.is_open())
+	{
+		plugin_log("No config.ini found, using defaults");
+		return config;
+	}
+	
+	std::string line;
+	std::string current_section = "";
+	bool in_target_section = false;
+	bool in_default_section = false;
+	
+	while (std::getline(file, line))
+	{
+		// Trim whitespace
+		line.erase(0, line.find_first_not_of(" \t\r\n"));
+		line.erase(line.find_last_not_of(" \t\r\n") + 1);
+		
+		// Skip empty lines and comments
+		if (line.empty() || line[0] == ';' || line[0] == '#')
+			continue;
+		
+		// Section header
+		if (line[0] == '[' && line[line.length()-1] == ']')
+		{
+			current_section = line.substr(1, line.length()-2);
+			in_target_section = (current_section == tid);
+			in_default_section = (current_section == "default");
+			continue;
+		}
+		
+		// Parse key=value
+		if (in_target_section || in_default_section)
+		{
+			size_t eq_pos = line.find('=');
+			if (eq_pos != std::string::npos)
+			{
+				std::string key = line.substr(0, eq_pos);
+				std::string value = line.substr(eq_pos + 1);
+				
+				// Trim key and value
+				key.erase(0, key.find_first_not_of(" \t"));
+				key.erase(key.find_last_not_of(" \t") + 1);
+				value.erase(0, value.find_first_not_of(" \t"));
+				value.erase(value.find_last_not_of(" \t") + 1);
+				
+				if (key == "frame_delay")
+				{
+					config.default_frame_delay = std::stoi(value);
+				}
+				else if (key == "apply_fps_patch")
+				{
+					config.apply_fps_patch = (value == "true" || value == "1");
+				}
+				else if (key.rfind("/data/", 0) == 0) // Path to PRX
+				{
+					// Format: /path/to/file.prx=true:frame_delay:required
+					// Exemple: /data/etaHEN/plugins/BeachMenu105.prx=true:600:true
+					
+					std::vector<std::string> parts;
+					std::stringstream ss(value);
+					std::string part;
+					while (std::getline(ss, part, ':'))
+					{
+						parts.push_back(part);
+					}
+					
+					PRXConfig prx;
+					prx.path = key;
+					
+					// Extract filename for name
+					size_t slash_pos = key.find_last_of('/');
+					if (slash_pos != std::string::npos)
+					{
+						prx.name = key.substr(slash_pos + 1);
+						// Remove .prx extension
+						size_t dot_pos = prx.name.find_last_of('.');
+						if (dot_pos != std::string::npos)
+						{
+							prx.name = prx.name.substr(0, dot_pos);
+						}
+					}
+					else
+					{
+						prx.name = key;
+					}
+					
+					// Parse enabled
+					prx.required = (parts.size() > 0 && (parts[0] == "true" || parts[0] == "1"));
+					
+					// Parse frame_delay (optional, defaults to config.default_frame_delay)
+					if (parts.size() > 1)
+					{
+						prx.frame_delay = std::stoi(parts[1]);
+					}
+					else
+					{
+						prx.frame_delay = config.default_frame_delay;
+					}
+					
+					// Parse required (optional, defaults to true)
+					if (parts.size() > 2)
+					{
+						// Note: parts[2] is actually "required" flag
+						bool is_required = (parts[2] == "true" || parts[2] == "1");
+						prx.required = is_required;
+					}
+					else
+					{
+						prx.required = true; // Default to required
+					}
+					
+					// Only add if enabled
+					if (parts.size() > 0 && (parts[0] == "true" || parts[0] == "1"))
+					{
+						config.prx_list.push_back(prx);
+					}
+				}
+			}
+		}
+	}
+	
+	file.close();
+	plugin_log("Config loaded for %s - default_frame_delay: %d, apply_fps_patch: %s, PRX files: %zu", 
+			   tid, config.default_frame_delay, config.apply_fps_patch ? "true" : "false", config.prx_list.size());
+	
+	return config;
 }

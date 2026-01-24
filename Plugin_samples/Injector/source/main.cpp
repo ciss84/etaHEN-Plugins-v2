@@ -168,56 +168,77 @@ int main()
     while(1)
     {
         int appid = 0;
-        std::vector<PRXConfig> prx_list;
+        const char* detected_tid = nullptr;
         const char* game_name = nullptr;
-        bool apply_fps_patch = false;
         
         while(true)
         {
-          // GTAV Detection (PS5)
-          if (Is_Game_Running(appid, "PPSA04264") || Is_Game_Running(appid, "PPSA04263"))
+          // Détecter GTAV PS5
+          if (Is_Game_Running(appid, "PPSA04264"))
           {
+             detected_tid = "PPSA04264";
              game_name = "GTAV";
-             apply_fps_patch = true;
-    
-             // Vérifier si /data/lso-online existe pour détecter le mode
-             int fd = open("/data/lso-online", O_RDONLY);
-             if (fd >= 0)
-             {
-               close(fd);
-               // Mode Online: Charger LSO105 + BeachMenu105
-                prx_list.push_back({"/data/etaHEN/plugins/LSO105.prx", "LSO105", true});
-                prx_list.push_back({"/data/etaHEN/plugins/BeachMenu105.prx", "BeachMenu105", true});
-                plugin_log("/data/lso-online found - Loading LSO105 + BeachMenu105 (Online mode)");
-             }
-             else
-             {
-                // Mode Story: Charger seulement BeachMenu105
-                prx_list.push_back({"/data/etaHEN/plugins/BeachMenu105.prx", "BeachMenu105", true});
-                plugin_log("/data/lso-online not found - Using BeachMenu105 only (Story mode)");
-             }
-    
+             break;
+          }
+          if (Is_Game_Running(appid, "PPSA04263"))
+          {
+             detected_tid = "PPSA04263";
+             game_name = "GTAV";
+             break;
+          }
+            
+          // Détecter RDR2 PS4
+          if (Is_Game_Running(appid, "CUSA03041"))
+          {
+              detected_tid = "CUSA03041";
+              game_name = "RDR2";
               break;
-            }
+          }
+          if (Is_Game_Running(appid, "CUSA08519"))
+          {
+              detected_tid = "CUSA08519";
+              game_name = "RDR2";
+              break;
+          }
             
-            // RDR2 Detection (PS4 only)
-            if (Is_Game_Running(appid, "CUSA03041") || // PS4 US
-                Is_Game_Running(appid, "CUSA08519"))   // PS4 EU
-            {
-                game_name = "RDR2";
-                apply_fps_patch = true;
-                prx_list.push_back({"/data/etaHEN/plugins/Sheriff.prx", "Sheriff", true});
-                
-                break;
-            }
-            
-            // Check more frequently to catch game startup faster
-            usleep(500000); // 0.5 secondes au lieu de 3
+          // Check more frequently to catch game startup faster
+          usleep(500000); // 0.5 secondes
         }
         
         plugin_log("========================================");
-        plugin_log("========== GAME DETECTED: %s ==========", game_name);
+        plugin_log("========== GAME DETECTED: %s (%s) ==========", game_name, detected_tid);
         plugin_log("========================================");
+        
+        // Load config for this game
+        GameConfig config = parse_config_for_tid(detected_tid);
+        
+        // If no PRX configured, fallback to hardcoded defaults
+        if (config.config.prx_list.empty())
+        {
+            plugin_log("No config found for %s, using hardcoded defaults", detected_tid);
+            
+            if (strcmp(game_name, "GTAV") == 0)
+            {
+                // Check if online mode
+                int fd = open("/data/lso-online", O_RDONLY);
+                if (fd >= 0)
+                {
+                    close(fd);
+                    config.config.prx_list.push_back({"/data/etaHEN/plugins/LSO105.prx", "LSO105", true, 600});
+                    config.config.prx_list.push_back({"/data/etaHEN/plugins/BeachMenu105.prx", "BeachMenu105", true, 600});
+                }
+                else
+                {
+                    config.config.prx_list.push_back({"/data/etaHEN/plugins/BeachMenu105.prx", "BeachMenu105", true, 600});
+                }
+                config.config.apply_fps_patch = true;
+            }
+            else if (strcmp(game_name, "RDR2") == 0)
+            {
+                config.config.prx_list.push_back({"/data/etaHEN/plugins/Sheriff.prx", "Sheriff", true, 60});
+                config.config.apply_fps_patch = true;
+            }
+        }
         plugin_log("AppID: 0x%X", appid);
         
         // Find PID - Optimized for speed
@@ -253,10 +274,10 @@ int main()
         const char* LSO105_path = nullptr;
         
         // Quick check if this is LSO105 (GTA Online)
-        for (const auto& prx : prx_list) {
-            if (strstr(prx.path, "LSO105.prx") != nullptr) {
+        for (const auto& prx : config.prx_list) {
+            if (strstr(prx.path.c_str(), "LSO105.prx") != nullptr) {
                 is_LSO105 = true;
-                LSO105_path = prx.path;
+                LSO105_path = prx.path.c_str();
                 break;
             }
         }
@@ -295,7 +316,7 @@ int main()
         
         // ========== LOAD LSO105.prx FIRST (BEFORE EVERYTHING) ==========
         
-        if (is_LSO105 && LSO105_path && apply_fps_patch && strcmp(game_name, "GTAV") == 0)
+        if (is_LSO105 && LSO105_path && config.apply_fps_patch && strcmp(game_name, "GTAV") == 0)
         {
             plugin_log("========================================");
             plugin_log("GTA V ONLINE - SUSPEND FIRST STRATEGY");
@@ -430,16 +451,16 @@ int main()
             continue;
         }
         
-        plugin_log("FPS patch enabled: %s", apply_fps_patch ? "YES" : "NO");
-        plugin_log("PRX to load: %d", (int)prx_list.size());
-        for (size_t i = 0; i < prx_list.size(); i++) {
-            plugin_log("  - PRX %zu: %s (%s)", i+1, prx_list[i].name, 
-                      prx_list[i].required ? "required" : "optional");
+        plugin_log("FPS patch enabled: %s", config.apply_fps_patch ? "YES" : "NO");
+        plugin_log("PRX to load: %d", (int)config.prx_list.size());
+        for (size_t i = 0; i < config.prx_list.size(); i++) {
+            plugin_log("  - PRX %zu: %s (%s)", i+1, config.prx_list[i].name, 
+                      config.prx_list[i].required ? "required" : "optional");
         }
         plugin_log("========================================");
         
         // ========== GTA V OFFLINE: EARLY DETECTION + PATCHES ==========
-        if (apply_fps_patch && strcmp(game_name, "GTAV") == 0 && !is_LSO105)
+        if (config.apply_fps_patch && strcmp(game_name, "GTAV") == 0 && !is_LSO105)
         {
             plugin_log("========================================");
             plugin_log("GTA V OFFLINE - EARLY LIBRARY DETECTION");
@@ -507,7 +528,7 @@ int main()
         }
         
         // ========== RDR2: PATCH APRES LA SUSPENSION (ORIGINAL BEHAVIOR) ==========
-        if (apply_fps_patch && strcmp(game_name, "RDR2") == 0)
+        if (config.apply_fps_patch && strcmp(game_name, "RDR2") == 0)
         {
             plugin_log("========================================");
             plugin_log("RDR2 detected - Patching AFTER suspension");
@@ -538,43 +559,34 @@ int main()
         bool critical_failed = false;
         int loaded_count = 0;
         
-        for (const auto& prx : prx_list)
+        for (const auto& prx : config.prx_list)
         {
             // Skip LSO105.prx - already loaded early
-            if (is_LSO105 && strstr(prx.path, "LSO105.prx") != nullptr) {
-                plugin_log("Skipping %s - already loaded early", prx.name);
+            if (is_LSO105 && strstr(prx.path.c_str(), "LSO105.prx") != nullptr) {
+                plugin_log("Skipping %s - already loaded early", prx.name.c_str());
                 loaded_count++;
                 continue;
             }
             
-            plugin_log("Loading PRX: %s from %s", prx.name, prx.path);
+            plugin_log("Loading PRX: %s from %s", prx.name.c_str(), prx.path.c_str());
             
-            // Déterminer le frame delay selon le jeu
-            int frame_delay = 60; // Défaut: 1 seconde
-            
-            // GTA V PS5 nécessite beaucoup plus de temps (600 frames = 10 sec)
-            if (strcmp(game_name, "GTAV") == 0)
-            {
-                frame_delay = 600; // 10 secondes pour GTA V PS5
-                plugin_log("GTA V PS5 detected - Using extended frame delay: 600 frames (~10 sec)");
-            }
-            else
-            {
-                plugin_log("Using standard frame delay: 60 frames (~1 sec) for %s", game_name);
-            }
+            // Use frame_delay from config
+            int frame_delay = prx.frame_delay;
+            plugin_log("Using frame delay from config: %d frames (~%.1f sec) for %s", 
+                      frame_delay, frame_delay / 60.0f, prx.name.c_str());
             
             bool loaded = false;
             for (int attempt = 0; attempt < 2; attempt++)
             {
                 if (attempt > 0)
                 {
-                    plugin_log("Retry attempt %d for %s", attempt + 1, prx.name);
+                    plugin_log("Retry attempt %d for %s", attempt + 1, prx.name.c_str());
                     usleep(200000);
                 }
                 
-                if(HookGame(executable, text_base, prx.path, false, frame_delay))
+                if(HookGame(executable, text_base, prx.path.c_str(), false, frame_delay))
                 {
-                    plugin_log("%s loaded successfully!", prx.name);
+                    plugin_log("%s loaded successfully!", prx.name.c_str());
                     loaded = true;
                     loaded_count++;
                     break;
@@ -583,7 +595,7 @@ int main()
             
             if (!loaded)
             {
-                plugin_log("FAILED to load %s after 2 attempts", prx.name);
+                plugin_log("FAILED to load %s after 2 attempts", prx.name.c_str());
                 if (prx.required)
                 {
                     critical_failed = true;
@@ -600,7 +612,7 @@ int main()
         
         plugin_log("========================================");
         plugin_log("PRX LOADING SUMMARY:");
-        plugin_log("Loaded: %d/%d PRX modules", loaded_count, (int)prx_list.size());
+        plugin_log("Loaded: %d/%d PRX modules", loaded_count, (int)config.prx_list.size());
         plugin_log("========================================");
         
         if (critical_failed)

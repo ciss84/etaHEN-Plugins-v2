@@ -12,6 +12,9 @@
 #include "hijacker/hijacker.hpp"
 #include "notify.hpp"
 #include "backtrace.hpp"
+#include <map>
+#include <string>
+#include <vector>
 
 #define ORBIS_PAD_PORT_TYPE_STANDARD 0
 #define ORBIS_PAD_PORT_TYPE_SPECIAL 2
@@ -219,6 +222,21 @@ static constexpr GameBuilder BUILDER_TEMPLATE_AUTO {
     0x18, 0x5b, 0x41, 0x5c, 0x41, 0x5e, 0x41, 0x5f, 0x5d, 0xc3
 };
 
+// Structure pour un PRX avec son frame_delay
+struct PRXConfig {
+    std::string path;
+    std::string name;
+    bool required;
+    int frame_delay;
+};
+
+// Configuration d'un jeu
+struct GameConfig {
+    int default_frame_delay = 300;  // Default 300 frames (~5 sec)
+    bool apply_fps_patch = false;
+    std::vector<PRXConfig> prx_list;
+};
+
 
 extern "C" int sceSystemServiceKillApp(int, int, int, int);
 extern "C" int sceSystemServiceGetAppId(const char *);
@@ -226,3 +244,4 @@ extern "C" int _sceApplicationGetAppId(int pid, int *appId);
 void plugin_log(const char* fmt, ...);
 bool Is_Game_Running(int &BigAppid, const char* title_id);
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay = 300);
+GameConfig parse_config_for_tid(const char* tid);
