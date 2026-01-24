@@ -2,7 +2,6 @@
 #include <notify.hpp>
 #include <signal.h>
 #include <ps5/klog.h>
-#include <ps5/payload_main.h>
 #include <string>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -21,7 +20,7 @@ extern const unsigned int elf_size;
 
 void sig_handler(int signo)
 {
-	printf_notification("Injector plugin crashed with signal %d", signo);
+	printf_notification("the error disabler plugin has crashed with signal %d\nif you need it you can relaunch via the etaHEN toolbox in debug settings", signo);
 	printBacktraceForCrash();
 	exit(-1);
 }
@@ -44,13 +43,13 @@ bool get_console_ip(char *ip_out, size_t ip_size)
 		if (ifa->ifa_addr == NULL)
 			continue;
 
-		// Look for IPv4 interface that is not loopback
+		// Chercher une interface IPv4 qui n'est pas loopback
 		if (ifa->ifa_addr->sa_family == AF_INET)
 		{
 			struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
 			const char *ip = inet_ntoa(addr->sin_addr);
 
-			// Ignore localhost (127.x.x.x)
+			// Ignorer localhost (127.x.x.x)
 			if (strncmp(ip, "127.", 4) != 0)
 			{
 				snprintf(ip_out, ip_size, "%s", ip);
@@ -146,7 +145,7 @@ int send_injector_data(const char *ip, int port,
 		return -1;
 	}
 
-	plugin_log("Sent %zu bytes to %s:%d", MAX_PROC_NAME + data_size, ip, port);
+	plugin_log("Sent %zu bytes to %s:%d\n", MAX_PROC_NAME + data_size, ip, port);
 
 	close(sock);
 	return 0;
@@ -156,8 +155,7 @@ void send_all_payloads(){
 	const char* dir_path = "/data/InjectorPlugin";
 	DIR* dir = opendir(dir_path);
     if (!dir) {
-        plugin_log("Cannot open directory: %s", dir_path);
-        printf_notification("Error: /data/InjectorPlugin not found");
+        plugin_log("Cannot open directory: %s\n", dir_path);
         return;
     }
 
@@ -166,7 +164,6 @@ void send_all_payloads(){
 	get_console_ip(console_ip, sizeof(console_ip));
 
     struct dirent* entry;
-    int payload_count = 0;
 
     while ((entry = readdir(dir)) != NULL) {
 
@@ -181,14 +178,12 @@ void send_all_payloads(){
         if (stat(fullpath, &st) < 0 || !S_ISREG(st.st_mode))
             continue;
 
-        plugin_log("Sending payload %d: %s (%lld bytes)",
-               payload_count + 1, entry->d_name, (long long)st.st_size);
-        printf_notification("Injecting: %s", entry->d_name);
+        plugin_log("Sending payload: %s (%lld bytes)\n",
+               fullpath, (long long)st.st_size);
 
         FILE* f = fopen(fullpath, "rb");
         if (!f) {
-            plugin_log("Cannot open file: %s", fullpath);
-            printf_notification("Error opening: %s", entry->d_name);
+            plugin_log("Cannot open file: %s\n", fullpath);
             continue;
         }
 
@@ -196,37 +191,21 @@ void send_all_payloads(){
         fread(buf, 1, st.st_size, f);
         fclose(f);
 
-        int result = send_injector_data(console_ip, 9021, "eboot.bin", buf, st.st_size);
+        send_injector_data(console_ip, 9021, "eboot.bin",  buf, st.st_size);
 
         free(buf);
-        payload_count++;
-        
-        if (result == 0) {
-            plugin_log("Payload %d sent successfully, waiting 3 seconds...", payload_count);
-            printf_notification("Payload %d sent\nWaiting for load...", payload_count);
-            sleep(3);
-        } else {
-            plugin_log("Failed to send payload %d", payload_count);
-            printf_notification("Failed to send payload %d", payload_count);
-        }
+		sleep(1);
     }
 
     closedir(dir);
-    
-    if (payload_count > 0) {
-        plugin_log("All %d payload(s) sent. Waiting 2 seconds for initialization...", payload_count);
-        printf_notification("All payloads sent!\nWaiting for initialization...");
-        sleep(2);
-        printf_notification("Injection complete!\n%d payload(s) loaded", payload_count);
-    } else {
-        plugin_log("No payloads found in %s", dir_path);
-        printf_notification("No payloads found in\n/data/InjectorPlugin");
-    }
 }
 
 uintptr_t kernel_base = 0;
 int main()
 {
+	// Premier log AVANT tout pour confirmer le demarrage
+	plugin_log("=== PLUGIN INJECTOR STARTING ===\n");
+	
 	payload_args_t *args = payload_get_args();
 	kernel_base = args->kdata_base_addr;
 
@@ -238,10 +217,8 @@ int main()
 	for (int i = 0; i < 12; i++)
 		sigaction(i, &new_SIG_action, NULL);
 
-	plugin_log("=== INJECTOR PLUGIN STARTING ===");
-	plugin_log("Plugin version: Auto Injector v1.0");
-	printf_notification("Injector Plugin Started\nMonitoring for games...");
-	plugin_log("Monitoring for game launches (CUSA/SCUS/PPSA)...");
+	plugin_log("=== Injector Plugin Started ===");
+	plugin_log("Monitoring for game launches...");
 
 	std::string tid;
 	int bappid, last_bappid = -1;
@@ -258,17 +235,14 @@ int main()
 		if ((bappid != last_bappid) && (tid.rfind("CUSA") != std::string::npos || tid.rfind("SCUS") != std::string::npos || tid.rfind("PPSA") != std::string::npos))
 		{
 			plugin_log("Game detected! TID: %s - Injecting in 10 seconds...", tid.c_str());
-			printf_notification("Game detected: %s\nInjecting in 10 seconds...", tid.c_str());
 			sleep(10);
 			int bappid_tmp;
 			if (!Get_Running_App_TID(tid, bappid_tmp))
 			{
 				plugin_log("App closed before injection");
-				printf_notification("Game closed before injection");
 				continue;
 			}
 			plugin_log("Starting injection now...");
-			printf_notification("Starting payload injection...");
 			if (bappid == bappid_tmp)
 			{
 				send_all_payloads();
@@ -276,7 +250,6 @@ int main()
 				plugin_log("Injection completed for TID: %s", tid.c_str());
 			} else {
 				plugin_log("App ID changed during wait - maybe app closed");
-				printf_notification("Injection failed - App closed");
 			}
 		}
 		sleep(5);

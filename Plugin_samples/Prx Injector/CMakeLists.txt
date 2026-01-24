@@ -6,11 +6,11 @@
 
 cmake_minimum_required (VERSION 3.20)
 
-set(basename "Prx Injector")
+set(basename "Injector")
 project(${basename} C CXX)
 
-set(PLUGIN_TITLE_ID "INJE00102")
-set(PLUGIN_VERSION "1.02")
+set(PLUGIN_TITLE_ID "INJE37000")
+set(PLUGIN_VERSION "1.01")
 
 # Language Standard Defaults
 set(CMAKE_C_STANDARD 17)
