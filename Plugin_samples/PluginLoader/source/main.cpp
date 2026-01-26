@@ -273,7 +273,7 @@ int main()
 		// Wait for game to close
 		plugin_log("Waiting for game to close...");
 		int monitor_count = 0;
-		if(monitor_count < 720)  // Monitor for max 1 hour (720 * 5s)
+		while(monitor_count < 720)  // Monitor for max 1 hour (720 * 5s)
 		{
 			if (!Get_Running_App_TID(tid, appid) || appid != pid)
 			{
