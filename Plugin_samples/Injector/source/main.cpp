@@ -58,7 +58,8 @@ uintptr_t kernel_base = 0;
 
 int main()
 {
-	plugin_log("=== INJECTOR WITH SHELLCODE STARTING ===");
+	plugin_log("=== INJECTOR WITH AGGRESSIVE MODE ===");
+	plugin_log("This version attempts injection even if process checks fail");
 
 	payload_args_t *args = payload_get_args();
 	kernel_base = args->kdata_base_addr;
@@ -72,9 +73,9 @@ int main()
 		sigaction(i, &new_SIG_action, NULL);
 
 	plugin_log("Injector ready - monitoring games");
-	printf_notification("Injector started - monitoring games");
+	printf_notification("Aggressive Injector started");
 
-	int last_failed_pid = -1;  // Track last PID that failed injection
+	int last_attempted_pid = -1;  // Track last PID we attempted (successful or not)
 
 	while(1)
 	{
@@ -95,8 +96,8 @@ int main()
 				continue;
 			}
 
-			// Skip if this is the same PID we just failed on
-			if (appid == last_failed_pid)
+			// Skip if this is the same PID we just attempted
+			if (appid == last_attempted_pid)
 			{
 				usleep(500000);
 				continue;
@@ -118,6 +119,9 @@ int main()
 		plugin_log("Game detected: %s (appid: %d)", detected_tid, appid);
 		plugin_log("========================================");
 
+		// Mark this PID as attempted immediately to prevent retry loops
+		last_attempted_pid = appid;
+
 		// Check if we have config for this game
 		auto it = config.games.find(detected_tid);
 		if (it == config.games.end())
@@ -128,6 +132,7 @@ int main()
 			{
 				sleep(5);
 			}
+			last_attempted_pid = -1;  // Reset when game closes
 			continue;
 		}
 
@@ -137,37 +142,33 @@ int main()
 		// Get process info
 		pid_t pid = appid;
 		plugin_log("PID: %d", pid);
-		plugin_log("Initial process check: %s", IsProcessRunning(pid) ? "ALIVE" : "DEAD");
 
-		// CRITICAL: Wait for game process initialization
-		// This delay is ESSENTIAL - without it, Hijacker::getHijacker() fails
-		// The old loader spent ~100-500ms scanning for PID which gave this delay naturally
-		plugin_log("Waiting for process initialization...");
+		// Wait for process initialization with diagnostic logging
+		plugin_log("Waiting 2 seconds for process initialization...");
 		
-		// Wait longer with periodic checks to see if process dies
-		bool process_alive = true;
-		for (int i = 0; i < 20; i++)  // Check 20 times over 2 seconds
+		int alive_count = 0;
+		int dead_count = 0;
+		for (int i = 0; i < 20; i++)
 		{
 			usleep(100000); // Wait 100ms
 			bool running = IsProcessRunning(pid);
-			if (!running)
-			{
-				plugin_log("Process check failed at iteration %d/20 (~%dms)", i+1, (i+1)*100);
-				plugin_log("IsProcessRunning returned: false");
-				process_alive = false;
-				break;
-			}
-		}
-
-		if (!process_alive)
-		{
-			plugin_log("ERROR: Process died during initialization");
-			last_failed_pid = pid;  // Remember this PID failed
-			plugin_log("Marked PID %d as failed - will skip on next detection", pid);
-			continue;
+			if (running)
+				alive_count++;
+			else
+				dead_count++;
 		}
 		
-		plugin_log("Process still alive after 2s - proceeding with injection");
+		plugin_log("Process check results: %d/20 alive, %d/20 dead", alive_count, dead_count);
+		
+		// AGGRESSIVE MODE: Try injection anyway if we got ANY alive signals
+		if (alive_count == 0)
+		{
+			plugin_log("WARNING: Process appears completely dead, but will try injection anyway");
+		}
+		else
+		{
+			plugin_log("Process seems alive (%d/20 checks passed) - proceeding", alive_count);
+		}
 
 		// Create hijacker - with retry logic
 		plugin_log("Creating hijacker for PID %d...", pid);
@@ -175,7 +176,7 @@ int main()
 		
 		if (!executable)
 		{
-			plugin_log("First attempt failed, retrying...");
+			plugin_log("First hijacker attempt failed, waiting 1s and retrying...");
 			sleep(1);
 			executable = Hijacker::getHijacker(pid);
 		}
@@ -183,7 +184,22 @@ int main()
 		if (!executable)
 		{
 			plugin_log("FAILED to create Hijacker for pid %d after retries", pid);
-			plugin_log("Process may not be ready yet");
+			plugin_log("This PID will be skipped until game restarts");
+			
+			// Wait for this game instance to close before trying again
+			plugin_log("Waiting for game to close...");
+			int wait_count = 0;
+			while(wait_count < 60)  // Wait max 5 minutes
+			{
+				if (!Get_Running_App_TID(tid, appid) || appid != pid)
+				{
+					plugin_log("Game closed or PID changed");
+					break;
+				}
+				sleep(5);
+				wait_count++;
+			}
+			last_attempted_pid = -1;  // Reset when game closes
 			continue;
 		}
 
@@ -230,13 +246,21 @@ int main()
 							success_count, prx_list.size(), detected_tid);
 
 		// Wait for game to close
-		while(IsProcessRunning(pid))
+		plugin_log("Waiting for game to close...");
+		int monitor_count = 0;
+		while(monitor_count < 720)  // Monitor for max 1 hour (720 * 5s)
 		{
+			if (!Get_Running_App_TID(tid, appid) || appid != pid)
+			{
+				plugin_log("Game closed or PID changed");
+				break;
+			}
 			sleep(5);
+			monitor_count++;
 		}
 
-		plugin_log("Game closed - waiting for next launch");
-		last_failed_pid = -1;  // Reset failed PID tracker when game closes
+		plugin_log("Game closed - ready for next launch");
+		last_attempted_pid = -1;  // Reset tracker when game closes
 	}
 
 	return 0;
