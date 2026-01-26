@@ -169,7 +169,7 @@ int main()
 		
 		if (pid == 0) {
 			plugin_log("ERROR: Failed to find real PID after 10 retries");
-			last_attempted_pid = -1;
+			last_attempted_appid = -1;
 			continue;
 		}
 
