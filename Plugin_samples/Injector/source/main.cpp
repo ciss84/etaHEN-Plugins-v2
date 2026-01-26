@@ -71,14 +71,15 @@ int main()
 	for (int i = 0; i < 12; i++)
 		sigaction(i, &new_SIG_action, NULL);
 
-	// Load config
-	GameInjectorConfig config = parse_injector_config();
-
-	plugin_log("Config loaded - %zu games configured", config.games.size());
+	plugin_log("Injector ready - monitoring games");
 	printf_notification("Injector started - monitoring games");
 
 	while(1)
 	{
+		// Reload config at each iteration to pick up changes
+		GameInjectorConfig config = parse_injector_config();
+		plugin_log("Config loaded - %zu games configured", config.games.size());
+
 		int appid = 0;
 		std::string tid;
 		const char* detected_tid = nullptr;
