@@ -129,19 +129,11 @@ int main()
 
 		// Attach hijacker
 		plugin_log("Attaching to process...");
-		auto p = ::getProc(pid);
-		if (!p) {
-			plugin_log("Failed to get process object");
+		UniquePtr<Hijacker> executable = Hijacker::getHijacker(pid);
+		if (!executable) {
+			plugin_log("Failed to create Hijacker for pid %d", pid);
 			continue;
 		}
-		
-		UniquePtr<SharedObject> obj = p->getSharedObject();
-		if (!obj) {
-			plugin_log("Failed to get shared object");
-			continue;
-		}
-		
-		UniquePtr<Hijacker> executable = new Hijacker(obj.release());
 
 		uint64_t text_base = executable->getEboot()->imagebase();
 		plugin_log("Process attached - text_base: 0x%llx", text_base);
