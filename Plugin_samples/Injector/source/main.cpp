@@ -105,7 +105,7 @@ int main()
 		}
 
 		plugin_log("========================================");
-		plugin_log("Game detected: %s", detected_tid);
+		plugin_log("Game detected: %s (appid: %d)", detected_tid, appid);
 		plugin_log("========================================");
 
 		// Check if we have config for this game
@@ -126,14 +126,40 @@ int main()
 
 		// Get process info
 		pid_t pid = appid;
+		plugin_log("PID: %d", pid);
 
-		// Attach hijacker
-		plugin_log("Attaching to process...");
-		UniquePtr<Hijacker> executable = Hijacker::getHijacker(pid);
-		if (!executable) {
-			plugin_log("Failed to create Hijacker for pid %d", pid);
+		// CRITICAL: Wait for game process initialization
+		// This delay is ESSENTIAL - without it, Hijacker::getHijacker() fails
+		// The old loader spent ~100-500ms scanning for PID which gave this delay naturally
+		plugin_log("Waiting for process initialization...");
+		usleep(500000); // Wait 500ms for process to initialize
+
+		// Verify process is still alive
+		if (!IsProcessRunning(pid))
+		{
+			plugin_log("ERROR: Process died during initialization");
 			continue;
 		}
+
+		// Create hijacker - with retry logic
+		plugin_log("Creating hijacker for PID %d...", pid);
+		UniquePtr<Hijacker> executable = Hijacker::getHijacker(pid);
+		
+		if (!executable)
+		{
+			plugin_log("First attempt failed, retrying...");
+			sleep(1);
+			executable = Hijacker::getHijacker(pid);
+		}
+		
+		if (!executable)
+		{
+			plugin_log("FAILED to create Hijacker for pid %d after retries", pid);
+			plugin_log("Process may not be ready yet");
+			continue;
+		}
+
+		plugin_log("Hijacker created successfully!");
 
 		uint64_t text_base = executable->getEboot()->imagebase();
 		plugin_log("Process attached - text_base: 0x%llx", text_base);

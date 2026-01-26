@@ -4,8 +4,6 @@
 #include <nid.hpp>
 #include <fcntl.h>
 #include <string>
-#include <fstream>
-#include <sstream>
 
 void write_log(const char* text)
 {
@@ -138,65 +136,122 @@ GameInjectorConfig parse_injector_config()
 {
 	GameInjectorConfig config;
 
-	std::ifstream file("/data/PluginLoader/PluginLoader.ini");
-	if (!file.is_open())
+	// Use POSIX open instead of std::ifstream for PS5 compatibility
+	int fd = open("/data/PluginLoader/PluginLoader.ini", O_RDONLY);
+	if (fd < 0)
 	{
-		plugin_log("No Injector.ini found");
+		plugin_log("No PluginLoader.ini found at /data/PluginLoader/PluginLoader.ini");
 		return config;
 	}
 
-	std::string line;
-	std::string current_tid = "";
-
-	while (std::getline(file, line))
+	// Read entire file (max 8KB config)
+	char buffer[8192];
+	int bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+	close(fd);
+	
+	if (bytes_read <= 0)
 	{
-		// Trim
-		line.erase(0, line.find_first_not_of(" \t\r\n"));
-		line.erase(line.find_last_not_of(" \t\r\n") + 1);
+		plugin_log("Failed to read PluginLoader.ini");
+		return config;
+	}
+	buffer[bytes_read] = '\0';
 
-		// Skip empty and comments
-		if (line.empty() || line[0] == ';' || line[0] == '#')
-			continue;
+	plugin_log("Config file read successfully: %d bytes", bytes_read);
 
-		// Section header [TID]
-		if (line[0] == '[' && line[line.length()-1] == ']')
+	// Parse buffer line by line manually
+	std::string current_tid = "";
+	char* ptr = buffer;
+	char* line_start = ptr;
+
+	while (ptr < buffer + bytes_read)
+	{
+		// Find end of line
+		if (*ptr == '\n' || *ptr == '\r' || ptr >= buffer + bytes_read - 1)
 		{
-			current_tid = line.substr(1, line.length()-2);
-			continue;
-		}
-
-		// Parse PRX line
-		if (!current_tid.empty())
-		{
-			// Format: filename.prx:frame_delay
-			size_t colon_pos = line.find(':');
-			std::string prx_file;
-			int frame_delay = 60;
-
-			if (colon_pos != std::string::npos)
+			// Extract line
+			size_t line_len = ptr - line_start;
+			if (ptr >= buffer + bytes_read - 1 && *ptr != '\n' && *ptr != '\r')
 			{
-				prx_file = line.substr(0, colon_pos);
-				frame_delay = std::stoi(line.substr(colon_pos + 1));
+				line_len++;
+			}
+			
+			std::string line(line_start, line_len);
+			
+			// Trim whitespace
+			size_t start = line.find_first_not_of(" \t\r");
+			size_t end = line.find_last_not_of(" \t\r");
+			
+			if (start != std::string::npos && end != std::string::npos)
+			{
+				line = line.substr(start, end - start + 1);
 			}
 			else
 			{
-				prx_file = line;
+				line = "";
 			}
 
-			// Build full path
-			std::string full_path = "/data/PluginLoader/" + prx_file;
+			// Skip empty lines and comments
+			if (!line.empty() && line[0] != ';' && line[0] != '#')
+			{
+				// Section header [TID]
+				if (line[0] == '[' && line[line.length()-1] == ']')
+				{
+					current_tid = line.substr(1, line.length()-2);
+					plugin_log("Config: Found section [%s]", current_tid.c_str());
+				}
+				// PRX line
+				else if (!current_tid.empty())
+				{
+					// Format: filename.prx:frame_delay
+					size_t colon_pos = line.find(':');
+					std::string prx_file;
+					int frame_delay = 60;
 
-			PRXConfig prx;
-			prx.path = full_path;
-			prx.frame_delay = frame_delay;
+					if (colon_pos != std::string::npos)
+					{
+						prx_file = line.substr(0, colon_pos);
+						frame_delay = atoi(line.substr(colon_pos + 1).c_str());
+					}
+					else
+					{
+						prx_file = line;
+					}
 
-			config.games[current_tid].push_back(prx);
+					// Build full path
+					std::string full_path = "/data/PluginLoader/" + prx_file;
 
-			plugin_log("Config: [%s] -> %s (delay: %d frames)",
-					   current_tid.c_str(), full_path.c_str(), frame_delay);
+					PRXConfig prx;
+					prx.path = full_path;
+					prx.frame_delay = frame_delay;
+
+					config.games[current_tid].push_back(prx);
+
+					plugin_log("Config: [%s] -> %s (delay: %d frames)",
+							   current_tid.c_str(), full_path.c_str(), frame_delay);
+				}
+			}
+
+			// Move to next line
+			if (*ptr == '\r' && ptr + 1 < buffer + bytes_read && *(ptr + 1) == '\n')
+			{
+				ptr += 2;  // Skip \r\n
+			}
+			else if (*ptr == '\n' || *ptr == '\r')
+			{
+				ptr++;  // Skip \n or \r
+			}
+			else
+			{
+				ptr++;  // End of buffer
+			}
+			line_start = ptr;
+		}
+		else
+		{
+			ptr++;
 		}
 	}
 
-	file.close();
+	plugin_log("Config parsing complete: %zu games configured", config.games.size());
 	return config;
 }
