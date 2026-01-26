@@ -138,7 +138,7 @@ GameInjectorConfig parse_injector_config()
 {
 	GameInjectorConfig config;
 
-	std::ifstream file("/data/etaHEN/Injector.ini");
+	std::ifstream file("/data/InjectorPlugin/Injector.ini");
 	if (!file.is_open())
 	{
 		plugin_log("No Injector.ini found");
