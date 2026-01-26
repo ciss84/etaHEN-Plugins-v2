@@ -214,7 +214,7 @@ int main()
 			// Wait for this game instance to close before trying again
 			plugin_log("Waiting for game to close...");
 			int wait_count = 0;
-			while(wait_count < 60)  // Wait max 5 minutes
+			if(wait_count < 60)  // Wait max 5 minutes
 			{
 				if (!Get_Running_App_TID(tid, appid) || appid != pid)
 				{
@@ -274,9 +274,9 @@ int main()
 							success_count, prx_list.size(), detected_tid);
 
 		// Wait for game to close
-		/*plugin_log("Waiting for game to close...");
+		plugin_log("Waiting for game to close...");
 		int monitor_count = 0;
-		while(monitor_count < 720)  // Monitor for max 1 hour (720 * 5s)
+		if(monitor_count < 720)  // Monitor for max 1 hour (720 * 5s)
 		{
 			if (!Get_Running_App_TID(tid, appid) || appid != pid)
 			{
@@ -285,7 +285,7 @@ int main()
 			}
 			sleep(5);
 			monitor_count++;
-		}*/
+		}
 
 		plugin_log("Game closed - ready for next launch");
 		last_attempted_pid = -1;  // Reset tracker when game closes
