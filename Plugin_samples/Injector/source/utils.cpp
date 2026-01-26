@@ -138,7 +138,7 @@ GameInjectorConfig parse_injector_config()
 {
 	GameInjectorConfig config;
 
-	std::ifstream file("/data/PluginLoader/Injector.ini");
+	std::ifstream file("/data/PluginLoader/PluginLoader.ini");
 	if (!file.is_open())
 	{
 		plugin_log("No Injector.ini found");
