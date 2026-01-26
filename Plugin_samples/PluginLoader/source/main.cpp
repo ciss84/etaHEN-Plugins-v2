@@ -75,7 +75,7 @@ int main()
 	plugin_log("Plugin Loader ready - monitoring games");
 	printf_notification("Plugin Loader v1.00 started");
 
-	int last_attempted_pid = -1;  // Track last PID we attempted (successful or not)
+	int last_attempted_appid = -1;  // Track last appid we attempted (successful or not)
 
 	while(1)
 	{
@@ -96,8 +96,8 @@ int main()
 				continue;
 			}
 
-			// Skip if this is the same PID we just attempted
-			if (appid == last_attempted_pid)
+			// Skip if this is the same appid we just attempted
+			if (appid == last_attempted_appid)
 			{
 				usleep(500000);
 				continue;
@@ -119,20 +119,27 @@ int main()
 		plugin_log("Game detected: %s (appid: %d)", detected_tid, appid);
 		plugin_log("========================================");
 
-		// Mark this PID as attempted immediately to prevent retry loops
-		last_attempted_pid = appid;
+		// Mark this appid as attempted immediately to prevent retry loops
+		last_attempted_appid = appid;
 
 		// Check if we have config for this game
 		auto it = config.games.find(detected_tid);
 		if (it == config.games.end())
 		{
 			plugin_log("No config for %s - skipping", detected_tid);
-			// Wait for game to close
-			while(IsProcessRunning(appid))
+			// Wait for game to close (or appid to change)
+			int current_appid = appid;
+			while(true)
 			{
+				int check_appid = 0;
+				std::string check_tid;
+				if (!Get_Running_App_TID(check_tid, check_appid) || check_appid != current_appid)
+				{
+					break;
+				}
 				sleep(5);
 			}
-			last_attempted_pid = -1;  // Reset when game closes
+			last_attempted_appid = -1;  // Reset when game closes
 			continue;
 		}
 
@@ -209,22 +216,25 @@ int main()
 		if (!executable)
 		{
 			plugin_log("FAILED to create Hijacker for pid %d after retries", pid);
-			plugin_log("This PID will be skipped until game restarts");
+			plugin_log("This game instance will be skipped until appid changes");
 			
-			// Wait for this game instance to close before trying again
-			plugin_log("Waiting for game to close...");
+			// Wait for this game instance to close (appid to change)
+			plugin_log("Waiting for appid to change...");
+			int current_appid = appid;
 			int wait_count = 0;
-			if(wait_count < 60)  // Wait max 5 minutes
+			while(wait_count < 60)  // Wait max 5 minutes
 			{
-				if (!Get_Running_App_TID(tid, appid) || appid != pid)
+				int check_appid = 0;
+				std::string check_tid;
+				if (!Get_Running_App_TID(check_tid, check_appid) || check_appid != current_appid)
 				{
-					plugin_log("Game closed or PID changed");
+					plugin_log("Game closed or appid changed");
 					break;
 				}
 				sleep(5);
 				wait_count++;
 			}
-			last_attempted_pid = -1;  // Reset when game closes
+			last_attempted_appid = -1;  // Reset when game closes
 			continue;
 		}
 
@@ -270,14 +280,17 @@ int main()
 		printf_notification("%d/%zu PRX injected into %s",
 							success_count, prx_list.size(), detected_tid);
 
-		// Wait for game to close
-		plugin_log("Waiting for game to close...");
+		// Wait for game to close (monitor appid changes)
+		plugin_log("Waiting for game to close (monitoring appid %d)...", appid);
+		int current_appid = appid;
 		int monitor_count = 0;
 		while(monitor_count < 720)  // Monitor for max 1 hour (720 * 5s)
 		{
-			if (!Get_Running_App_TID(tid, appid) || appid != pid)
+			int check_appid = 0;
+			std::string check_tid;
+			if (!Get_Running_App_TID(check_tid, check_appid) || check_appid != current_appid)
 			{
-				plugin_log("Game closed or PID changed");
+				plugin_log("Game closed or appid changed (was %d, now %d)", current_appid, check_appid);
 				break;
 			}
 			sleep(5);
@@ -285,7 +298,7 @@ int main()
 		}
 
 		plugin_log("Game closed - ready for next launch");
-		last_attempted_pid = -1;  // Reset tracker when game closes
+		last_attempted_appid = -1;  // Reset tracker when game closes
 	}
 
 	return 0;
