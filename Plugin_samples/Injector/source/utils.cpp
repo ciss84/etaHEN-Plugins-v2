@@ -10,7 +10,7 @@
 void write_log(const char* text)
 {
 	int text_len = strlen(text);
-	int fd = open("/data/etaHEN/plloader_plugin.log", O_WRONLY | O_CREAT | O_APPEND, 0777);
+	int fd = open("/data/PluginLoader/PluginLoader.log", O_WRONLY | O_CREAT | O_APPEND, 0777);
 	if (fd < 0)
 	{
 		return;
@@ -138,7 +138,7 @@ GameInjectorConfig parse_injector_config()
 {
 	GameInjectorConfig config;
 
-	std::ifstream file("/data/InjectorPlugin/Injector.ini");
+	std::ifstream file("/data/PluginLoader/Injector.ini");
 	if (!file.is_open())
 	{
 		plugin_log("No Injector.ini found");
@@ -184,7 +184,7 @@ GameInjectorConfig parse_injector_config()
 			}
 
 			// Build full path
-			std::string full_path = "/data/InjectorPlugin/" + prx_file;
+			std::string full_path = "/data/PluginLoader/" + prx_file;
 
 			PRXConfig prx;
 			prx.path = full_path;
