@@ -128,7 +128,8 @@ int main()
 
 		// Attach hijacker
 		plugin_log("Attaching to process...");
-		auto executable = makeUnique<Hijacker>(pid);
+		SharedObject* obj = new SharedObject(pid);
+		UniquePtr<Hijacker> executable = makeUnique<Hijacker>(obj);
 
 		uint64_t text_base = executable->getEboot()->imagebase();
 		plugin_log("Process attached - text_base: 0x%llx", text_base);

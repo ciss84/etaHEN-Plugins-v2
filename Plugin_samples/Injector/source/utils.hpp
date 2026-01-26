@@ -6,12 +6,22 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <memory>
 #include "dbg.hpp"
 #include "dbg/dbg.hpp"
 #include "elf/elf.hpp"
 #include "hijacker/hijacker.hpp"
 #include "notify.hpp"
 #include "backtrace.hpp"
+
+// Type aliases for smart pointers
+template<typename T>
+using UniquePtr = std::unique_ptr<T>;
+
+template<typename T, typename... Args>
+auto makeUnique(Args&&... args) {
+    return std::make_unique<T>(std::forward<Args>(args)...);
+}
 
 #define ORBIS_PAD_PORT_TYPE_STANDARD 0
 #define ORBIS_PAD_PORT_TYPE_SPECIAL 2
@@ -157,7 +167,7 @@ struct GameStuff {
   uint64_t ASLR_Base = 0;            // +0x20
   char prx_path[256];                 // +0x28
   int loaded = 0;                     // +0x128
-  uint64_t game_hash = 0;            // +0x12C (padding fait que c'est à +0x130)
+  uint64_t game_hash = 0;            // +0x12C (padding fait que c'est a +0x130)
   int frame_delay = 300;             // +0x138
   int frame_counter = 0;             // +0x13C
 
@@ -194,7 +204,7 @@ static constexpr GameBuilder BUILDER_TEMPLATE {
 
 // Auto-load shellcode AVEC HASH CHECK (210 bytes)
 // Correspond au code C dans Shellcode.c
-// Permet de charger PLUSIEURS PRX différents (LSO153 + BeachOffline)
+// Permet de charger PLUSIEURS PRX differents (LSO153 + BeachOffline)
 static constexpr GameBuilder BUILDER_TEMPLATE_AUTO {
     0x48, 0xba, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x55, 0x41, 0x57, 0x41, 0x56, 0x41, 0x54, 0x53, 0x48, 0x83,
