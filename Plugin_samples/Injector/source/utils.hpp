@@ -6,22 +6,12 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <memory>
 #include "dbg.hpp"
 #include "dbg/dbg.hpp"
 #include "elf/elf.hpp"
 #include "hijacker/hijacker.hpp"
 #include "notify.hpp"
 #include "backtrace.hpp"
-
-// Type aliases for smart pointers
-template<typename T>
-using UniquePtr = std::unique_ptr<T>;
-
-template<typename T, typename... Args>
-auto makeUnique(Args&&... args) {
-    return std::make_unique<T>(std::forward<Args>(args)...);
-}
 
 #define ORBIS_PAD_PORT_TYPE_STANDARD 0
 #define ORBIS_PAD_PORT_TYPE_SPECIAL 2

@@ -2,6 +2,7 @@
 #include <notify.hpp>
 #include <signal.h>
 #include <string>
+#include <ps5/kernel.h>
 
 extern "C"
 {
@@ -128,8 +129,19 @@ int main()
 
 		// Attach hijacker
 		plugin_log("Attaching to process...");
-		SharedObject* obj = new SharedObject(pid);
-		UniquePtr<Hijacker> executable = makeUnique<Hijacker>(obj);
+		auto p = ::getProc(pid);
+		if (!p) {
+			plugin_log("Failed to get process object");
+			continue;
+		}
+		
+		UniquePtr<SharedObject> obj = p->getSharedObject();
+		if (!obj) {
+			plugin_log("Failed to get shared object");
+			continue;
+		}
+		
+		UniquePtr<Hijacker> executable = new Hijacker(obj.release());
 
 		uint64_t text_base = executable->getEboot()->imagebase();
 		plugin_log("Process attached - text_base: 0x%llx", text_base);
