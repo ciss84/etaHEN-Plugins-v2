@@ -16,7 +16,7 @@ extern "C"
 
 void sig_handler(int signo)
 {
-	printf_notification("Injector plugin crashed with signal %d", signo);
+	printf_notification("Plugin Loader crashed with signal %d", signo);
 	printBacktraceForCrash();
 	exit(-1);
 }
@@ -58,7 +58,7 @@ uintptr_t kernel_base = 0;
 
 int main()
 {
-	plugin_log("=== INJECTOR WITH AGGRESSIVE MODE ===");
+	plugin_log("=== PLUGIN LOADER WITH AGGRESSIVE MODE ===");
 	plugin_log("This version attempts injection even if process checks fail");
 
 	payload_args_t *args = payload_get_args();
@@ -72,8 +72,8 @@ int main()
 	for (int i = 0; i < 12; i++)
 		sigaction(i, &new_SIG_action, NULL);
 
-	plugin_log("Injector ready - monitoring games");
-	printf_notification("Aggressive Injector started");
+	plugin_log("Plugin Loader ready - monitoring games");
+	printf_notification("Plugin Loader v1.00 started");
 
 	int last_attempted_pid = -1;  // Track last PID we attempted (successful or not)
 
@@ -139,9 +139,34 @@ int main()
 		std::vector<PRXConfig> &prx_list = it->second;
 		plugin_log("Found %zu PRX to inject for %s", prx_list.size(), detected_tid);
 
-		// Get process info
-		pid_t pid = appid;
-		plugin_log("PID: %d", pid);
+		// CRITICAL FIX: Find the real PID (not appid!)
+		// appid is the application ID, we need to find the process ID
+		plugin_log("Searching for real PID (appid=%d)...", appid);
+		int bappid = 0;
+		pid_t pid = 0;
+		
+		for (int retry = 0; retry < 10 && pid == 0; retry++) {
+			for (size_t j = 0; j <= 9999; j++) {
+				if (_sceApplicationGetAppId(j, &bappid) < 0)
+					continue;
+				if (appid == bappid) {
+					pid = j;
+					plugin_log("Real PID found: %d (retry %d)", pid, retry);
+					break;
+				}
+			}
+			if (pid == 0) {
+				usleep(50000); // Wait 50ms before retry
+			}
+		}
+		
+		if (pid == 0) {
+			plugin_log("ERROR: Failed to find real PID after 10 retries");
+			last_attempted_pid = -1;
+			continue;
+		}
+
+		plugin_log("PID: %d (converted from appid: %d)", pid, appid);
 
 		// Wait for process initialization with diagnostic logging
 		plugin_log("Waiting 2 seconds for process initialization...");
