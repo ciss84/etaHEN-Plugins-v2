@@ -270,6 +270,9 @@ int main()
 		printf_notification("%d/%zu PRX injected into %s",
 							success_count, prx_list.size(), detected_tid);
 
+		printf_notification("%d/%zu PRX injected into %s",
+							success_count, prx_list.size(), detected_tid);
+
 		// Wait for game to close
 		/*plugin_log("Waiting for game to close...");
 		int monitor_count = 0;
@@ -282,11 +285,11 @@ int main()
 			}
 			sleep(5);
 			monitor_count++;
-		}
+		}*/
 
 		plugin_log("Game closed - ready for next launch");
 		last_attempted_pid = -1;  // Reset tracker when game closes
-	}*/
+	}
 
 	return 0;
 }
