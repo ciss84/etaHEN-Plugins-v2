@@ -74,6 +74,8 @@ int main()
 	plugin_log("Injector ready - monitoring games");
 	printf_notification("Injector started - monitoring games");
 
+	int last_failed_pid = -1;  // Track last PID that failed injection
+
 	while(1)
 	{
 		// Reload config at each iteration to pick up changes
@@ -88,6 +90,13 @@ int main()
 		while(true)
 		{
 			if (!Get_Running_App_TID(tid, appid))
+			{
+				usleep(500000);
+				continue;
+			}
+
+			// Skip if this is the same PID we just failed on
+			if (appid == last_failed_pid)
 			{
 				usleep(500000);
 				continue;
@@ -128,19 +137,37 @@ int main()
 		// Get process info
 		pid_t pid = appid;
 		plugin_log("PID: %d", pid);
+		plugin_log("Initial process check: %s", IsProcessRunning(pid) ? "ALIVE" : "DEAD");
 
 		// CRITICAL: Wait for game process initialization
 		// This delay is ESSENTIAL - without it, Hijacker::getHijacker() fails
 		// The old loader spent ~100-500ms scanning for PID which gave this delay naturally
 		plugin_log("Waiting for process initialization...");
-		usleep(500000); // Wait 500ms for process to initialize
+		
+		// Wait longer with periodic checks to see if process dies
+		bool process_alive = true;
+		for (int i = 0; i < 20; i++)  // Check 20 times over 2 seconds
+		{
+			usleep(100000); // Wait 100ms
+			bool running = IsProcessRunning(pid);
+			if (!running)
+			{
+				plugin_log("Process check failed at iteration %d/20 (~%dms)", i+1, (i+1)*100);
+				plugin_log("IsProcessRunning returned: false");
+				process_alive = false;
+				break;
+			}
+		}
 
-		// Verify process is still alive
-		if (!IsProcessRunning(pid))
+		if (!process_alive)
 		{
 			plugin_log("ERROR: Process died during initialization");
+			last_failed_pid = pid;  // Remember this PID failed
+			plugin_log("Marked PID %d as failed - will skip on next detection", pid);
 			continue;
 		}
+		
+		plugin_log("Process still alive after 2s - proceeding with injection");
 
 		// Create hijacker - with retry logic
 		plugin_log("Creating hijacker for PID %d...", pid);
@@ -209,6 +236,7 @@ int main()
 		}
 
 		plugin_log("Game closed - waiting for next launch");
+		last_failed_pid = -1;  // Reset failed PID tracker when game closes
 	}
 
 	return 0;
