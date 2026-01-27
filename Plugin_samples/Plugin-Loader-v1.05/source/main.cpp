@@ -253,7 +253,14 @@ int main()
 		for (const auto& prx : prx_list)
 		{
 			plugin_log("Injecting: %s", prx.path.c_str());
-
+      for (int attempt = 0; attempt < 2; attempt++)
+      {
+       if (attempt > 0)
+       {
+            plugin_log("Retry attempt %d for %s", attempt + 1, prx.name);
+            usleep(200000);
+       }
+         
 			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
 			{
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
@@ -264,9 +271,8 @@ int main()
 			{
 				plugin_log("FAILED: %s", prx.path.c_str());
 			}
-
-			//usleep(100000);
-			sleep(10);
+     }
+		 usleep(1000000);
 		}
 
 		// Resume game
