@@ -35,19 +35,6 @@ bool Get_Running_App_TID(std::string &title_id, int &BigAppid)
 	return true;
 }
 
-static void SuspendApp(pid_t pid)
-{
-	sceKernelPrepareToSuspendProcess(pid);
-	sceKernelSuspendProcess(pid);
-}
-
-static void ResumeApp(pid_t pid)
-{
-	usleep(500000);
-	sceKernelPrepareToResumeProcess(pid);
-	sceKernelResumeProcess(pid);
-}
-
 bool IsProcessRunning(pid_t pid)
 {
 	int bappid = 0;
@@ -245,11 +232,12 @@ int main()
 
 		// Suspend game
 		plugin_log("Suspending game...");
-		SuspendApp(pid);
+    sceKernelPrepareToSuspendProcess(pid);
+    sceKernelSuspendProcess(pid);
 		usleep(500000);
 
 		// Inject all PRX
-		//int success_count = 0;
+		int success_count = 0;
 		for (const auto& prx : prx_list)
 		{
 			plugin_log("Injecting: %s", prx.path.c_str());
@@ -279,8 +267,10 @@ int main()
 
 		// Resume game
 		plugin_log("Resuming game...");
-		ResumeApp(pid);
-
+	  usleep(600000);
+	  sceKernelPrepareToResumeProcess(pid);
+	  sceKernelResumeProcess(pid);
+	  
 		plugin_log("========================================");
 		plugin_log("Injection complete: %d/%zu PRX loaded",
 				   success_count, prx_list.size());
