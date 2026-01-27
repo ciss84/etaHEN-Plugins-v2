@@ -4,7 +4,7 @@
 #include <nid.hpp>
 #include <fcntl.h>
 #include <string>
-//////
+
 void write_log(const char* text)
 {
 	int text_len = strlen(text);
