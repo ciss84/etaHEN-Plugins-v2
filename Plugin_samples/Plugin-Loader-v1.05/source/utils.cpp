@@ -220,8 +220,18 @@ GameInjectorConfig parse_injector_config()
 						prx_file = line;
 					}
 
-					// Build full path
-					std::string full_path = "/data/PluginLoader/" + prx_file;
+					// Build full path ONLY if it's not already an absolute path
+					std::string full_path;
+					if (prx_file[0] == '/')
+					{
+						// Already absolute path - use as-is
+						full_path = prx_file;
+					}
+					else
+					{
+						// Relative path - prepend /data/PluginLoader/
+						full_path = "/data/PluginLoader/" + prx_file;
+					}
 
 					PRXConfig prx;
 					prx.path = full_path;
