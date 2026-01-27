@@ -1,6 +1,6 @@
 #include "utils.hpp"
 #include <notify.hpp>
-<parameter name="signal.h"
+#include <signal.h>
 #include <string>
 #include <ps5/kernel.h>
 
