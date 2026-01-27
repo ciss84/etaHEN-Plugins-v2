@@ -236,9 +236,10 @@ int main()
 		uint64_t text_base = executable->getEboot()->imagebase();
 		plugin_log("Process attached - text_base: 0x%llx", text_base);
 
-		// NO SUSPEND - Inject while game is running!
-		// The frame_delay in shellcode will handle the timing
-		plugin_log("Injecting without suspend (hot injection)...");
+		// Suspend game
+		plugin_log("Suspending game...");
+		SuspendApp(pid);
+		usleep(500000); // 500ms apres suspend
 
 		// ========================================
 		// MULTI-PRX INJECTION - ONE HOOK FOR ALL
@@ -261,7 +262,11 @@ int main()
 			plugin_log("FAILED: Could not install unified hook");
 		}
 
-		plugin_log("Injection complete - PRX will load after frame_delay");
+		usleep(500000); // 500ms apres injection
+
+		// Resume game
+		plugin_log("Resuming game...");
+		ResumeApp(pid);
 
 		plugin_log("========================================");
 		if (hook_success)
