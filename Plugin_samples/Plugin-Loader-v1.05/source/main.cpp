@@ -265,6 +265,8 @@ int main()
 			{
 				plugin_log("FAILED: %s", prx.path.c_str());
 			}
+			// Attendre 1 seconde entre chaque PRX pour eviter l'ecrasement
+			usleep(1000000);  // 1000ms = 1 seconde
 		}
 
 		// Resume game
