@@ -16,7 +16,7 @@ extern "C"
 
 void sig_handler(int signo)
 {
-	printf_notification("Plugin Loader v1.04 crashed with signal %d", signo);
+	printf_notification("Plugin Loader v1.05 crashed with signal %d", signo);
 	printBacktraceForCrash();
 	exit(-1);
 }
@@ -58,7 +58,7 @@ uintptr_t kernel_base = 0;
 
 int main()
 {
-	plugin_log("=== PLUGIN LOADER v1.04 WITH AGGRESSIVE MODE ===");
+	plugin_log("=== PLUGIN LOADER v1.05 WITH AGGRESSIVE MODE ===");
 	plugin_log("This version attempts injection even if process checks fail");
 
 	payload_args_t *args = payload_get_args();
@@ -72,8 +72,8 @@ int main()
 	for (int i = 0; i < 12; i++)
 		sigaction(i, &new_SIG_action, NULL);
 
-	plugin_log("Plugin Loader v1.04 ready - monitoring games");
-	printf_notification("Plugin Loader v1.04 started");
+	plugin_log("Plugin Loader v1.05 ready - monitoring games");
+	printf_notification("Plugin Loader v1.05 started");
 
 	int last_attempted_appid = -1;  // Track last appid we attempted (successful or not)
 
@@ -180,7 +180,7 @@ int main()
 		
 		int alive_count = 0;
 		int dead_count = 0;
-		for (int i = 0; i < 10; i++)
+		for (int i = 0; i < 6; i++)
 		{
 			usleep(100000); // Wait 100ms
 			bool running = IsProcessRunning(pid);
@@ -257,16 +257,16 @@ int main()
 			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
 			{
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
-						   prx.path.c_str(), prx.frame_delay);	   
+						   prx.path.c_str(), prx.frame_delay);
 				success_count++;
-				continue;
 			}
 			else
 			{
 				plugin_log("FAILED: %s", prx.path.c_str());
 			}
-			// Attendre 1 seconde entre chaque PRX pour eviter l'ecrasement
-			usleep(1000000);  // 1000ms = 1 seconde
+
+			//usleep(100000);
+			sleep(10);
 		}
 
 		// Resume game
