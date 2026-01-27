@@ -16,7 +16,7 @@ extern "C"
 
 void sig_handler(int signo)
 {
-	printf_notification("Plugin Loader v1.05 Multi-PRX crashed with signal %d", signo);
+	printf_notification("Plugin Loader v1.05 crashed with signal %d", signo);
 	printBacktraceForCrash();
 	exit(-1);
 }
@@ -58,8 +58,8 @@ uintptr_t kernel_base = 0;
 
 int main()
 {
-	plugin_log("=== PLUGIN LOADER v1.05 MULTI-PRX UNIFIED HOOK ===");
-	plugin_log("This version uses ONE hook to load multiple PRX");
+	plugin_log("=== PLUGIN LOADER v1.05 WITH AGGRESSIVE MODE ===");
+	plugin_log("This version attempts injection even if process checks fail");
 
 	payload_args_t *args = payload_get_args();
 	kernel_base = args->kdata_base_addr;
@@ -73,12 +73,13 @@ int main()
 		sigaction(i, &new_SIG_action, NULL);
 
 	plugin_log("Plugin Loader v1.05 ready - monitoring games");
-	printf_notification("Plugin Loader v1.05 Multi-PRX started");
+	printf_notification("Plugin Loader v1.05 started");
 
-	int last_attempted_appid = -1;
+	int last_attempted_appid = -1;  // Track last appid we attempted (successful or not)
 
 	while(1)
 	{
+		// Reload config at each iteration to pick up changes
 		GameInjectorConfig config = parse_injector_config();
 		plugin_log("Config loaded - %zu games configured", config.games.size());
 
@@ -95,12 +96,14 @@ int main()
 				continue;
 			}
 
+			// Skip if this is the same appid we just attempted
 			if (appid == last_attempted_appid)
 			{
 				usleep(500000);
 				continue;
 			}
 
+			// Check if it's a game (CUSA/SCUS/PPSA)
 			if (tid.rfind("CUSA") != std::string::npos ||
 				tid.rfind("SCUS") != std::string::npos ||
 				tid.rfind("PPSA") != std::string::npos)
@@ -116,6 +119,7 @@ int main()
 		plugin_log("Game detected: %s (appid: %d)", detected_tid, appid);
 		plugin_log("========================================");
 
+		// Mark this appid as attempted immediately to prevent retry loops
 		last_attempted_appid = appid;
 
 		// Check if we have config for this game
@@ -123,6 +127,7 @@ int main()
 		if (it == config.games.end())
 		{
 			plugin_log("No config for %s - skipping", detected_tid);
+			// Wait for game to close (or appid to change)
 			int current_appid = appid;
 			while(true)
 			{
@@ -134,20 +139,15 @@ int main()
 				}
 				sleep(5);
 			}
-			last_attempted_appid = -1;
+			last_attempted_appid = -1;  // Reset when game closes
 			continue;
 		}
 
 		std::vector<PRXConfig> &prx_list = it->second;
 		plugin_log("Found %zu PRX to inject for %s", prx_list.size(), detected_tid);
 
-		// CRITICAL: Limit to MAX 4 PRX (shellcode limitation)
-		if (prx_list.size() > 4)
-		{
-			plugin_log("WARNING: More than 4 PRX configured, only first 4 will be loaded");
-		}
-
-		// Find the real PID
+		// CRITICAL FIX: Find the real PID (not appid!)
+		// appid is the application ID, we need to find the process ID
 		plugin_log("Searching for real PID (appid=%d)...", appid);
 		int bappid = 0;
 		pid_t pid = 0;
@@ -163,7 +163,7 @@ int main()
 				}
 			}
 			if (pid == 0) {
-				usleep(50000);
+				usleep(50000); // Wait 50ms before retry
 			}
 		}
 		
@@ -175,53 +175,66 @@ int main()
 
 		plugin_log("PID: %d (converted from appid: %d)", pid, appid);
 
-		// Wait for process initialization
-		plugin_log("Waiting for process initialization...");
+		// Wait for process initialization with diagnostic logging
+		plugin_log("Waiting 2 seconds for process initialization...");
 		
 		int alive_count = 0;
+		int dead_count = 0;
 		for (int i = 0; i < 5; i++)
 		{
-			usleep(100000);
-			if (IsProcessRunning(pid))
+			usleep(100000); // Wait 100ms
+			bool running = IsProcessRunning(pid);
+			if (running)
 				alive_count++;
+			else
+				dead_count++;
 		}
 		
-		plugin_log("Process check: %d/5 alive", alive_count);
+		plugin_log("Process check results: %d/20 alive, %d/20 dead", alive_count, dead_count);
 		
+		// AGGRESSIVE MODE: Try injection anyway if we got ANY alive signals
 		if (alive_count == 0)
 		{
-			plugin_log("WARNING: Process appears dead, trying injection anyway");
+			plugin_log("WARNING: Process appears completely dead, but will try injection anyway");
+		}
+		else
+		{
+			plugin_log("Process seems alive (%d/20 checks passed) - proceeding", alive_count);
 		}
 
-		// Create hijacker
+		// Create hijacker - with retry logic
 		plugin_log("Creating hijacker for PID %d...", pid);
 		UniquePtr<Hijacker> executable = Hijacker::getHijacker(pid);
 		
 		if (!executable)
 		{
-			plugin_log("First hijacker attempt failed, retrying in 1s...");
+			plugin_log("First hijacker attempt failed, waiting 1s and retrying...");
 			sleep(1);
 			executable = Hijacker::getHijacker(pid);
 		}
 		
 		if (!executable)
 		{
-			plugin_log("FAILED to create Hijacker for pid %d", pid);
+			plugin_log("FAILED to create Hijacker for pid %d after retries", pid);
+			plugin_log("This game instance will be skipped until appid changes");
 			
+			// Wait for this game instance to close (appid to change)
+			plugin_log("Waiting for appid to change...");
 			int current_appid = appid;
 			int wait_count = 0;
-			while(wait_count < 60)
+			while(wait_count < 60)  // Wait max 5 minutes
 			{
 				int check_appid = 0;
 				std::string check_tid;
 				if (!Get_Running_App_TID(check_tid, check_appid) || check_appid != current_appid)
 				{
+					plugin_log("Game closed or appid changed");
 					break;
 				}
 				sleep(5);
 				wait_count++;
 			}
-			last_attempted_appid = -1;
+			last_attempted_appid = -1;  // Reset when game closes
 			continue;
 		}
 
@@ -233,67 +246,55 @@ int main()
 		// Suspend game
 		plugin_log("Suspending game...");
 		SuspendApp(pid);
-		usleep(500000); // 500ms apres suspend
+		usleep(500000);
 
-		// ========================================
-		// MULTI-PRX INJECTION - ONE HOOK FOR ALL
-		// ========================================
-		plugin_log("Installing unified multi-PRX hook for %zu PRX...", prx_list.size());
+		// Inject all PRX (FIXED: only last one to avoid hook collision)
+		int success_count = 0;
 		
-		bool hook_success = HookGameMultiPRX(executable, text_base, prx_list);
-		
-		if (hook_success)
+		if (prx_list.size() > 1)
 		{
-			plugin_log("SUCCESS: Unified hook installed for %zu PRX", prx_list.size());
-			for (size_t i = 0; i < prx_list.size(); i++)
-			{
-				plugin_log("  [%zu] %s (delay: %d frames)", 
-					i+1, prx_list[i].path.c_str(), prx_list[i].frame_delay);
-			}
+			plugin_log("WARNING: %zu PRX detected, installing ONLY the last one to avoid crash", prx_list.size());
+		}
+		
+		// Install ONLY the last PRX
+		const auto& prx = prx_list.back();
+		
+		plugin_log("Injecting: %s", prx.path.c_str());
+
+		if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
+		{
+			plugin_log("SUCCESS: %s injected (frame_delay: %d)",
+					   prx.path.c_str(), prx.frame_delay);
+			success_count = 1;
 		}
 		else
 		{
-			plugin_log("FAILED: Could not install unified hook");
+			plugin_log("FAILED: %s", prx.path.c_str());
 		}
-
-		usleep(500000); // 500ms apres injection
 
 		// Resume game
 		plugin_log("Resuming game...");
 		ResumeApp(pid);
 
 		plugin_log("========================================");
-		if (hook_success)
-		{
-			plugin_log("Multi-PRX hook active: %zu PRX will auto-load", prx_list.size());
-		}
-		else
-		{
-			plugin_log("Hook installation failed");
-		}
+		plugin_log("Injection complete: %d/%zu PRX loaded",
+				   success_count, prx_list.size());
 		plugin_log("========================================");
 
-		if (hook_success)
-		{
-			printf_notification("Multi-PRX hook: %zu plugins for %s", 
-								prx_list.size(), detected_tid);
-		}
-		else
-		{
-			printf_notification("Hook failed for %s", detected_tid);
-		}
+		printf_notification("%d/%zu PRX injected into %s",
+							success_count, prx_list.size(), detected_tid);
 
-		// Wait for game to close
+		// Wait for game to close (monitor appid changes)
 		plugin_log("Waiting for game to close (monitoring appid %d)...", appid);
 		int current_appid = appid;
 		int monitor_count = 0;
-		while(monitor_count < 720)
+		while(monitor_count < 720)  // Monitor for max 1 hour (720 * 5s)
 		{
 			int check_appid = 0;
 			std::string check_tid;
 			if (!Get_Running_App_TID(check_tid, check_appid) || check_appid != current_appid)
 			{
-				plugin_log("Game closed (was %d, now %d)", current_appid, check_appid);
+				plugin_log("Game closed or appid changed (was %d, now %d)", current_appid, check_appid);
 				break;
 			}
 			sleep(5);
@@ -301,7 +302,7 @@ int main()
 		}
 
 		plugin_log("Game closed - ready for next launch");
-		last_attempted_appid = -1;
+		last_attempted_appid = -1;  // Reset tracker when game closes
 	}
 
 	return 0;

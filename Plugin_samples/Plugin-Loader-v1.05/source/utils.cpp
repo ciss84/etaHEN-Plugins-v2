@@ -92,15 +92,12 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   stuff.prx_path[sizeof(stuff.prx_path) - 1] = '\0';
   stuff.frame_delay = frame_delay;
   stuff.frame_counter = 0; // Reset counter
-  stuff.loaded = 0;        // Force reset - permet multi-PRX
-  stuff.game_hash = 0;     // Force reset - ignore hash check
   
   plugin_log("GameStuff configured:");
   plugin_log("  - prx_path: %s", stuff.prx_path);
   plugin_log("  - frame_delay: %d frames (~%.1f seconds at 60fps)", 
              frame_delay, frame_delay / 60.0f);
   plugin_log("  - frame_counter: %d (initial)", stuff.frame_counter);
-  plugin_log("  - loaded: %d (forced to 0 for multi-PRX)", stuff.loaded);
 
   auto code = hijacker->getTextAllocator().allocate(shellcode_size);
   plugin_log("shellcode addr: 0x%llx (size: %zu bytes)", code, shellcode_size);
@@ -220,18 +217,8 @@ GameInjectorConfig parse_injector_config()
 						prx_file = line;
 					}
 
-					// Build full path ONLY if it's not already an absolute path
-					std::string full_path;
-					if (prx_file[0] == '/')
-					{
-						// Already absolute path - use as-is
-						full_path = prx_file;
-					}
-					else
-					{
-						// Relative path - prepend /data/PluginLoader/
-						full_path = "/data/PluginLoader/" + prx_file;
-					}
+					// Build full path
+					std::string full_path = "/data/PluginLoader/" + prx_file;
 
 					PRXConfig prx;
 					prx.path = full_path;
@@ -267,50 +254,4 @@ GameInjectorConfig parse_injector_config()
 
 	plugin_log("Config parsing complete: %zu games configured", config.games.size());
 	return config;
-}
-
-// ============================================================
-// HookGameMultiPRX - VERSION SAFE (INSTALLE SEULEMENT LE DERNIER)
-// ============================================================
-// Cette version n'installe que le DERNIER PRX de la liste
-// pour eviter les hooks qui s'ecrasent et causent le crash
-// ============================================================
-bool HookGameMultiPRX(UniquePtr<Hijacker> &executable, uint64_t text_base, const std::vector<PRXConfig> &prx_list)
-{
-	if (prx_list.empty())
-	{
-		plugin_log("ERROR: No PRX to inject");
-		return false;
-	}
-	
-	// VERSION SAFE: Installe SEULEMENT le dernier PRX
-	if (prx_list.size() > 1)
-	{
-		plugin_log("=== SAFE MODE: Multiple PRX detected ===");
-		plugin_log("WARNING: Installing ONLY the last PRX to avoid crash!");
-		plugin_log("Skipping %zu PRX:", prx_list.size() - 1);
-		for (size_t i = 0; i < prx_list.size() - 1; i++)
-		{
-			plugin_log("  SKIPPED: %s", prx_list[i].path.c_str());
-		}
-	}
-	
-	// Installe seulement le DERNIER PRX
-	const PRXConfig &last_prx = prx_list.back();
-	
-	plugin_log("Installing ONLY: %s (frame_delay: %d)", 
-	           last_prx.path.c_str(), last_prx.frame_delay);
-	
-	bool success = HookGame(executable, text_base, last_prx.path.c_str(), true, last_prx.frame_delay);
-	
-	if (success)
-	{
-		plugin_log("SUCCESS: Hook installed for %s", last_prx.path.c_str());
-	}
-	else
-	{
-		plugin_log("FAILED: Could not install hook for %s", last_prx.path.c_str());
-	}
-	
-	return success;
 }

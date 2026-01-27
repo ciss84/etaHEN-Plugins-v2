@@ -241,5 +241,4 @@ struct GameInjectorConfig {
 void plugin_log(const char* fmt, ...);
 bool Is_Game_Running(int &BigAppid, const char* title_id);
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay = 300);
-bool HookGameMultiPRX(UniquePtr<Hijacker> &executable, uint64_t text_base, const std::vector<PRXConfig> &prx_list);
 GameInjectorConfig parse_injector_config();
