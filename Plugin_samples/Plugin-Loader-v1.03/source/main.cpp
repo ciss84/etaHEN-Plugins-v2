@@ -16,7 +16,7 @@ extern "C"
 
 void sig_handler(int signo)
 {
-	printf_notification("Plugin Loader v1.03 crashed with signal %d", signo);
+	printf_notification("Plugin Loader v1.04 crashed with signal %d", signo);
 	printBacktraceForCrash();
 	exit(-1);
 }
@@ -58,8 +58,8 @@ uintptr_t kernel_base = 0;
 
 int main()
 {
-	plugin_log("=== Plugin Loader v1.03 WITH AGGRESSIVE MODE ===");
-	plugin_log("This version attempts injection even if process checks fail");
+	plugin_log("=== Plugin Loader v1.04 WITH SUSPEND CONTROL ===");
+	plugin_log("Config format: PRX:delay=true/false (true=suspend game)");
 
 	payload_args_t *args = payload_get_args();
 	kernel_base = args->kdata_base_addr;
@@ -72,14 +72,14 @@ int main()
 	for (int i = 0; i < 12; i++)
 		sigaction(i, &new_SIG_action, NULL);
 
-	plugin_log("Plugin Loader v1.03 ready - monitoring games");
-	printf_notification("Plugin Loader v1.03 started");
+	plugin_log("Plugin Loader v1.04 ready - monitoring games");
+	printf_notification("Plugin Loader v1.04 started");
 
-	int last_attempted_appid = -1;  // Track last appid we attempted (successful or not)
+	int last_attempted_appid = -1;
 
 	while(1)
 	{
-		// Reload config at each iteration to pick up changes
+		// Reload config at each iteration
 		GameInjectorConfig config = parse_injector_config();
 		plugin_log("Config loaded - %zu games configured", config.games.size());
 
@@ -96,14 +96,14 @@ int main()
 				continue;
 			}
 
-			// Skip if this is the same appid we just attempted
+			// Skip if same appid we just attempted
 			if (appid == last_attempted_appid)
 			{
 				usleep(500000);
 				continue;
 			}
 
-			// Check if it's a game (CUSA/SCUS/PPSA)
+			// Check if it's a game
 			if (tid.rfind("CUSA") != std::string::npos ||
 				tid.rfind("SCUS") != std::string::npos ||
 				tid.rfind("PPSA") != std::string::npos)
@@ -119,7 +119,6 @@ int main()
 		plugin_log("Game detected: %s (appid: %d)", detected_tid, appid);
 		plugin_log("========================================");
 
-		// Mark this appid as attempted immediately to prevent retry loops
 		last_attempted_appid = appid;
 
 		// Check if we have config for this game
@@ -127,7 +126,7 @@ int main()
 		if (it == config.games.end())
 		{
 			plugin_log("No config for %s - skipping", detected_tid);
-			// Wait for game to close (or appid to change)
+			// Wait for game to close
 			int current_appid = appid;
 			while(true)
 			{
@@ -139,15 +138,14 @@ int main()
 				}
 				sleep(5);
 			}
-			last_attempted_appid = -1;  // Reset when game closes
+			last_attempted_appid = -1;
 			continue;
 		}
 
 		std::vector<PRXConfig> &prx_list = it->second;
 		plugin_log("Found %zu PRX to inject for %s", prx_list.size(), detected_tid);
 
-		// CRITICAL FIX: Find the real PID (not appid!)
-		// appid is the application ID, we need to find the process ID
+		// Find real PID
 		plugin_log("Searching for real PID (appid=%d)...", appid);
 		int bappid = 0;
 		pid_t pid = 0;
@@ -163,7 +161,7 @@ int main()
 				}
 			}
 			if (pid == 0) {
-				usleep(50000); // Wait 50ms before retry
+				usleep(50000);
 			}
 		}
 		
@@ -175,34 +173,11 @@ int main()
 
 		plugin_log("PID: %d (converted from appid: %d)", pid, appid);
 
-		// Wait for process initialization with diagnostic logging
+		// Wait for process initialization
 		plugin_log("Waiting 2 seconds for process initialization...");
-		
-		int alive_count = 0;
-		int dead_count = 0;
-		for (int i = 0; i < 20; i++)
-		{
-			usleep(100000); // Wait 100ms
-			bool running = IsProcessRunning(pid);
-			if (running)
-				alive_count++;
-			else
-				dead_count++;
-		}
-		
-		plugin_log("Process check results: %d/20 alive, %d/20 dead", alive_count, dead_count);
-		
-		// AGGRESSIVE MODE: Try injection anyway if we got ANY alive signals
-		if (alive_count == 0)
-		{
-			plugin_log("WARNING: Process appears completely dead, but will try injection anyway");
-		}
-		else
-		{
-			plugin_log("Process seems alive (%d/20 checks passed) - proceeding", alive_count);
-		}
+		sleep(2);
 
-		// Create hijacker - with retry logic
+		// Create hijacker
 		plugin_log("Creating hijacker for PID %d...", pid);
 		UniquePtr<Hijacker> executable = Hijacker::getHijacker(pid);
 		
@@ -216,25 +191,20 @@ int main()
 		if (!executable)
 		{
 			plugin_log("FAILED to create Hijacker for pid %d after retries", pid);
-			plugin_log("This game instance will be skipped until appid changes");
 			
-			// Wait for this game instance to close (appid to change)
-			plugin_log("Waiting for appid to change...");
+			// Wait for game to close
 			int current_appid = appid;
-			int wait_count = 0;
-			while(wait_count < 60)  // Wait max 5 minutes
+			while(current_appid == appid)
 			{
 				int check_appid = 0;
 				std::string check_tid;
 				if (!Get_Running_App_TID(check_tid, check_appid) || check_appid != current_appid)
 				{
-					plugin_log("Game closed or appid changed");
 					break;
 				}
 				sleep(5);
-				wait_count++;
 			}
-			last_attempted_appid = -1;  // Reset when game closes
+			last_attempted_appid = -1;
 			continue;
 		}
 
@@ -243,47 +213,75 @@ int main()
 		uint64_t text_base = executable->getEboot()->imagebase();
 		plugin_log("Process attached - text_base: 0x%llx", text_base);
 
-		// Suspend game
-		plugin_log("Suspending game...");
-		SuspendApp(pid);
-		usleep(500000);
+		// INJECT EACH PRX WITH INDIVIDUAL SUSPEND CONTROL
+		int success_count = 0;
+		for (size_t i = 0; i < prx_list.size(); i++)
+		{
+			const PRXConfig &prx = prx_list[i];
+			
+			plugin_log("========================================");
+			plugin_log("Injecting PRX %zu/%zu: %s", i+1, prx_list.size(), prx.path.c_str());
+			plugin_log("  Frame delay: %d frames", prx.frame_delay);
+			plugin_log("  Suspend game: %s", prx.suspend_game ? "YES" : "NO");
+			plugin_log("========================================");
 
-		// CRITICAL FIX: Use HookMultiPRX instead of loop
-		// Old method: each HookGame() call OVERWRITES the previous hook
-		// New method: ONE hook handles ALL PRX with individual frame_delay
-		plugin_log("Installing multi-PRX hook...");
-		bool success = HookMultiPRX(executable, text_base, prx_list);
+			// Suspend ONLY if config says so
+			if (prx.suspend_game)
+			{
+				plugin_log("Suspending game (suspend_game=true)...");
+				SuspendApp(pid);
+				usleep(500000);
+			}
+			else
+			{
+				plugin_log("NOT suspending game (suspend_game=false)");
+			}
 
-		// Resume game
-		plugin_log("Resuming game...");
-		ResumeApp(pid);
+			// Install hook
+			bool success = HookGame(executable, text_base, prx.path.c_str(), true, prx.frame_delay);
+
+			// Resume ONLY if we suspended
+			if (prx.suspend_game)
+			{
+				plugin_log("Resuming game...");
+				ResumeApp(pid);
+			}
+
+			if (success)
+			{
+				success_count++;
+				plugin_log("PRX %zu injection: SUCCESS", i+1);
+			}
+			else
+			{
+				plugin_log("PRX %zu injection: FAILED", i+1);
+			}
+		}
 
 		plugin_log("========================================");
-		plugin_log("Multi-PRX injection: %s", success ? "SUCCESS" : "FAILED");
+		plugin_log("Injection complete: %d/%zu PRX successful", success_count, prx_list.size());
 		plugin_log("========================================");
 
-		printf_notification("Multi-PRX %s for %s",
-							success ? "OK" : "FAIL", detected_tid);
+		printf_notification("Injected %d/%zu PRX for %s",
+							success_count, prx_list.size(), detected_tid);
 
-		// Wait for game to close (monitor appid changes)
+		// Wait for game to close
 		plugin_log("Waiting for game to close (monitoring appid %d)...", appid);
 		int current_appid = appid;
-		int monitor_count = 0;
-		while(monitor_count < 720)  // Monitor for max 1 hour (720 * 5s)
+		while(true)
 		{
 			int check_appid = 0;
 			std::string check_tid;
 			if (!Get_Running_App_TID(check_tid, check_appid) || check_appid != current_appid)
 			{
-				plugin_log("Game closed or appid changed (was %d, now %d)", current_appid, check_appid);
+				plugin_log("Game closed (appid changed)");
 				break;
 			}
 			sleep(5);
-			monitor_count++;
 		}
 
 		plugin_log("Game closed - ready for next launch");
-		last_attempted_appid = -1;  // Reset tracker when game closes
+		last_attempted_appid = -1;
 	}
 
 	return 0;
