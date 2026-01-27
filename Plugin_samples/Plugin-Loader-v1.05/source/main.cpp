@@ -259,7 +259,7 @@ int main()
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
 						   prx.path.c_str(), prx.frame_delay);	   
 				success_count++;
-				break;
+				continue;
 			}
 			else
 			{
