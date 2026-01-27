@@ -257,7 +257,7 @@ int main()
       {
        if (attempt > 0)
        {
-            plugin_log("Retry attempt %d for %s", attempt + 1, prx.path.c_str()));
+            plugin_log("Retry attempt %d for %s", attempt + 1, prx.path.c_str());
             usleep(200000);
        }
          
