@@ -258,3 +258,53 @@ GameInjectorConfig parse_injector_config()
 	plugin_log("Config parsing complete: %zu games configured", config.games.size());
 	return config;
 }
+
+// ============================================================
+// HookGameMultiPRX - VERSION TEMPORAIRE FALLBACK
+// ============================================================
+// Cette version appelle HookGame() pour chaque PRX
+// ATTENTION: Seul le DERNIER PRX fonctionnera car les hooks s'écrasent!
+// Pour la vraie solution multi-PRX, il faut compiler Shellcode_MultiPRX.c
+// ============================================================
+bool HookGameMultiPRX(UniquePtr<Hijacker> &executable, uint64_t text_base, const std::vector<PRXConfig> &prx_list)
+{
+	plugin_log("=== MULTI-PRX HOOK (TEMPORARY FALLBACK MODE) ===");
+	plugin_log("WARNING: Using old method - only last PRX will work!");
+	plugin_log("To fix: compile Shellcode_MultiPRX.c and update this function");
+	
+	if (prx_list.empty())
+	{
+		plugin_log("ERROR: No PRX to inject");
+		return false;
+	}
+	
+	int success_count = 0;
+	
+	// Appelle l'ancien HookGame() pour chaque PRX
+	// PROBLÈME: Chaque appel écrase le hook précédent!
+	for (const auto& prx : prx_list)
+	{
+		plugin_log("Installing hook for: %s (frame_delay: %d)", 
+		           prx.path.c_str(), prx.frame_delay);
+		
+		if (HookGame(executable, text_base, prx.path.c_str(), true, prx.frame_delay))
+		{
+			plugin_log("Hook installed (but may be overwritten by next PRX)");
+			success_count++;
+		}
+		else
+		{
+			plugin_log("FAILED to install hook for: %s", prx.path.c_str());
+		}
+		
+		usleep(100000);  // 100ms entre chaque
+	}
+	
+	plugin_log("========================================");
+	plugin_log("Fallback: %d/%zu hooks installed", success_count, prx_list.size());
+	plugin_log("Only the LAST PRX (%s) will actually work!", 
+	           prx_list.back().path.c_str());
+	plugin_log("========================================");
+	
+	return (success_count > 0);
+}

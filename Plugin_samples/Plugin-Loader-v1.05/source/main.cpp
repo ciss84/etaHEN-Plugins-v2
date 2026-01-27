@@ -1,6 +1,7 @@
 #include "utils.hpp"
 #include <notify.hpp>
 #include <sys/signal.h>
+#include <string.h>
 #include <string>
 #include <ps5/kernel.h>
 
@@ -65,12 +66,15 @@ int main()
 	kernel_base = args->kdata_base_addr;
 
 	struct sigaction new_SIG_action;
+	memset(&new_SIG_action, 0, sizeof(new_SIG_action));
 	new_SIG_action.sa_handler = sig_handler;
-	sigemptyset(&new_SIG_action.sa_mask);
 	new_SIG_action.sa_flags = 0;
 
-	for (int i = 0; i < 12; i++)
-		sigaction(i, &new_SIG_action, NULL);
+	for (int i = 1; i <= SIGUSR2; i++)
+	{
+		if (i != SIGKILL && i != SIGSTOP)
+			sigaction(i, &new_SIG_action, NULL);
+	}
 
 	plugin_log("Plugin Loader v1.05 ready - monitoring games");
 	printf_notification("Plugin Loader v1.05 Multi-PRX started");
