@@ -249,7 +249,7 @@ int main()
 		usleep(500000);
 
 		// Inject all PRX
-		bool loaded = false;
+		//bool loaded = false;
 		int success_count = 0;
 		for (const auto& prx : prx_list)
 		{
