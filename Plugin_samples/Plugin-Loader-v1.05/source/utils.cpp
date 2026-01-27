@@ -93,11 +93,15 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   stuff.frame_delay = frame_delay;
   stuff.frame_counter = 0; // Reset counter
   
+  // Force loaded to 0 for multi-PRX support
+  stuff.loaded = 0;
+  
   plugin_log("GameStuff configured:");
   plugin_log("  - prx_path: %s", stuff.prx_path);
   plugin_log("  - frame_delay: %d frames (~%.1f seconds at 60fps)", 
              frame_delay, frame_delay / 60.0f);
   plugin_log("  - frame_counter: %d (initial)", stuff.frame_counter);
+  plugin_log("  - loaded: %d (forced to 0 for multi-PRX)", stuff.loaded);
 
   auto code = hijacker->getTextAllocator().allocate(shellcode_size);
   plugin_log("shellcode addr: 0x%llx (size: %zu bytes)", code, shellcode_size);
@@ -110,15 +114,29 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   
   for (const auto &plt : plttab) {
     if (ELF64_R_SYM(plt.r_info) == index) {
+      uintptr_t hook_adr = hijacker->getEboot()->imagebase() + plt.r_offset;
+      
+      // CRITICAL: Read old hook address BEFORE overwriting (for chained hooks)
+      uintptr_t old_hook_addr = 0;
+      hijacker->read(hook_adr, old_hook_addr);
+      
+      // Check if old hook looks valid (not pointing to libScePad original function)
+      // Original function is in libScePad (0x800xxxxxxx), our hooks are in game memory
+      if (old_hook_addr != 0 && (old_hook_addr & 0xFF00000000000000) != 0x8000000000000000) {
+        stuff.old_hook = old_hook_addr;
+        plugin_log("Found previous hook at 0x%llx - creating chained hook", old_hook_addr);
+      } else {
+        stuff.old_hook = 0;
+        plugin_log("No previous hook detected (addr: 0x%llx)", old_hook_addr);
+      }
+      
       builder.setExtraStuffAddr(stuffAddr);
       
-      uint8_t shellcode_buffer[GameBuilder::SHELLCODE_SIZE];
+      uint8_t shellcode_buffer[GameBuilder::SHELLCODE_SIZE_AUTO];
       memcpy(shellcode_buffer, builder.shellcode, shellcode_size);
       
       hijacker->write(code, shellcode_buffer);
       hijacker->write(stuffAddr, stuff);
-
-      uintptr_t hook_adr = hijacker->getEboot()->imagebase() + plt.r_offset;
 
       hijacker->write<uintptr_t>(hook_adr, code);
       plugin_log("hook addr: 0x%llx", hook_adr);
