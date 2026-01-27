@@ -1,6 +1,6 @@
 #include "utils.hpp"
 #include <notify.hpp>
-#include <sys/signal.h>
+#include <signal.h>
 #include <string>
 #include <ps5/kernel.h>
 
@@ -64,19 +64,13 @@ int main()
 	payload_args_t *args = payload_get_args();
 	kernel_base = args->kdata_base_addr;
 
-	// Install signal handlers using signal() instead of sigaction()
-	signal(SIGHUP, sig_handler);
-	signal(SIGINT, sig_handler);
-	signal(SIGQUIT, sig_handler);
-	signal(SIGILL, sig_handler);
-	signal(SIGTRAP, sig_handler);
-	signal(SIGABRT, sig_handler);
-	signal(SIGFPE, sig_handler);
-	signal(SIGBUS, sig_handler);
-	signal(SIGSEGV, sig_handler);
-	signal(SIGSYS, sig_handler);
-	signal(SIGPIPE, sig_handler);
-	signal(SIGTERM, sig_handler);
+	struct sigaction new_SIG_action;
+	new_SIG_action.sa_handler = sig_handler;
+	sigemptyset(&new_SIG_action.sa_mask);
+	new_SIG_action.sa_flags = 0;
+
+	for (int i = 0; i < 12; i++)
+		sigaction(i, &new_SIG_action, NULL);
 
 	plugin_log("Plugin Loader v1.05 ready - monitoring games");
 	printf_notification("Plugin Loader v1.05 Multi-PRX started");
