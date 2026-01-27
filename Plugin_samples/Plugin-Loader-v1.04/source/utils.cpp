@@ -92,12 +92,15 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   stuff.prx_path[sizeof(stuff.prx_path) - 1] = '\0';
   stuff.frame_delay = frame_delay;
   stuff.frame_counter = 0; // Reset counter
+  stuff.loaded = 0;        // Force reset - permet multi-PRX
+  stuff.game_hash = 0;     // Force reset - ignore hash check
   
   plugin_log("GameStuff configured:");
   plugin_log("  - prx_path: %s", stuff.prx_path);
   plugin_log("  - frame_delay: %d frames (~%.1f seconds at 60fps)", 
              frame_delay, frame_delay / 60.0f);
   plugin_log("  - frame_counter: %d (initial)", stuff.frame_counter);
+  plugin_log("  - loaded: %d (forced to 0 for multi-PRX)", stuff.loaded);
 
   auto code = hijacker->getTextAllocator().allocate(shellcode_size);
   plugin_log("shellcode addr: 0x%llx (size: %zu bytes)", code, shellcode_size);
