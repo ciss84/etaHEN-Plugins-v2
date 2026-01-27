@@ -254,7 +254,7 @@ int main()
 		{
 			plugin_log("Injecting: %s", prx.path.c_str());
 
-			if (HookGame(executable, text_base, prx.path.c_str(), true, prx.frame_delay))
+			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
 			{
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
 						   prx.path.c_str(), prx.frame_delay);
