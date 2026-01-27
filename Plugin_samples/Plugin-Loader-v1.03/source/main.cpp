@@ -16,7 +16,7 @@ extern "C"
 
 void sig_handler(int signo)
 {
-	printf_notification("Plugin Loader v1.02 crashed with signal %d", signo);
+	printf_notification("Plugin Loader v1.03 crashed with signal %d", signo);
 	printBacktraceForCrash();
 	exit(-1);
 }
@@ -58,7 +58,7 @@ uintptr_t kernel_base = 0;
 
 int main()
 {
-	plugin_log("=== Plugin Loader v1.02 WITH AGGRESSIVE MODE ===");
+	plugin_log("=== Plugin Loader v1.03 WITH AGGRESSIVE MODE ===");
 	plugin_log("This version attempts injection even if process checks fail");
 
 	payload_args_t *args = payload_get_args();
@@ -72,8 +72,8 @@ int main()
 	for (int i = 0; i < 12; i++)
 		sigaction(i, &new_SIG_action, NULL);
 
-	plugin_log("Plugin Loader v1.02 ready - monitoring games");
-	printf_notification("Plugin Loader v1.02 started");
+	plugin_log("Plugin Loader v1.03 ready - monitoring games");
+	printf_notification("Plugin Loader v1.03 started");
 
 	int last_attempted_appid = -1;  // Track last appid we attempted (successful or not)
 
