@@ -241,27 +241,17 @@ int main()
 		for (const auto& prx : prx_list)
 		{
 			plugin_log("Injecting: %s", prx.path.c_str());
-      for (int attempt = 0; attempt < 2; attempt++)
-      {
-       if (attempt > 0)
-       {
-            plugin_log("Retry attempt %d for %s", attempt + 1, prx.path.c_str());
-            usleep(200000);
-       }
          
 			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
 			{
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
-						   prx.path.c_str(), prx.frame_delay);
-				//printf_notification("SUCCESS: %s injected (frame_delay: %d)",
-				       //prx.path.c_str(), prx.frame_delay);		   
+						   prx.path.c_str(), prx.frame_delay);	   
 				success_count++;
 			}
 			else
 			{
 				plugin_log("FAILED: %s", prx.path.c_str());
 			}
-     }
 		 usleep(750000);
 		}
 
