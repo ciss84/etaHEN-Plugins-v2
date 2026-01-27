@@ -4,6 +4,13 @@
 #include <string>
 #include <ps5/kernel.h>
 
+void sig_handler(int signo)
+{
+	printf_notification("Plugin Loader v1.05 crashed with signal %d", signo);
+	printBacktraceForCrash();
+	exit(-1);
+}
+
 extern "C"
 {
 	int sceSystemServiceGetAppIdOfRunningBigApp();
@@ -12,13 +19,6 @@ extern "C"
 	int32_t sceKernelSuspendProcess(pid_t pid);
 	int32_t sceKernelPrepareToResumeProcess(pid_t pid);
 	int32_t sceKernelResumeProcess(pid_t pid);
-}
-
-void sig_handler(int signo)
-{
-	printf_notification("Plugin Loader v1.05 crashed with signal %d", signo);
-	printBacktraceForCrash();
-	exit(-1);
 }
 
 bool Get_Running_App_TID(std::string &title_id, int &BigAppid)
@@ -35,12 +35,6 @@ bool Get_Running_App_TID(std::string &title_id, int &BigAppid)
 	return true;
 }
 
-bool IsProcessRunning(pid_t pid)
-{
-	int bappid = 0;
-	return (_sceApplicationGetAppId(pid, &bappid) >= 0);
-}
-
 static void SuspendApp(pid_t pid)
 {
 	sceKernelPrepareToSuspendProcess(pid);
@@ -52,6 +46,12 @@ static void ResumeApp(pid_t pid)
 	usleep(500000);
 	sceKernelPrepareToResumeProcess(pid);
 	sceKernelResumeProcess(pid);
+}
+
+bool IsProcessRunning(pid_t pid)
+{
+	int bappid = 0;
+	return (_sceApplicationGetAppId(pid, &bappid) >= 0);
 }
 
 uintptr_t kernel_base = 0;
@@ -249,7 +249,7 @@ int main()
 		usleep(500000);
 
 		// Inject all PRX
-		int success_count = 0;
+		//int success_count = 0;
 		for (const auto& prx : prx_list)
 		{
 			plugin_log("Injecting: %s", prx.path.c_str());
@@ -263,16 +263,18 @@ int main()
          
 			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
 			{
-				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
-						   prx.path.c_str(), prx.frame_delay);
-				success_count++;
+			  plugin_log(".prx loaded successfully!");
+        printf_notification(".prx loaded successfully");
+				//plugin_log("SUCCESS: %s injected (frame_delay: %d)",
+						   //prx.path.c_str(), prx.frame_delay);
+				//success_count++;
 			}
 			else
 			{
 				plugin_log("FAILED: %s", prx.path.c_str());
 			}
      }
-		 usleep(1000000);
+		 usleep(750000);
 		}
 
 		// Resume game
