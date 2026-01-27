@@ -228,18 +228,6 @@ extern "C" int _sceApplicationGetAppId(int pid, int *appId);
 #include <string>
 #include <vector>
 
-// Config structure for injector
-/*struct PRXConfig {
-	std::string path;
-	int frame_delay;
-	bool suspend_game;  // true = suspend game during injection
-};
-
-struct GameInjectorConfig {
-	std::map<std::string, std::vector<PRXConfig>> games;
-};*/
-
 void plugin_log(const char* fmt, ...);
 bool Is_Game_Running(int &BigAppid, const char* title_id);
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay = 300);
-GameInjectorConfig parse_injector_config();
