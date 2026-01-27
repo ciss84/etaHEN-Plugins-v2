@@ -149,30 +149,45 @@
 		uint8_t unknown[8];
 	} OrbisPadInformation;
 
-struct GameStuff {
-  uintptr_t scePadReadState;        // +0x00
-  uintptr_t debugout;                // +0x08
-  uintptr_t sceKernelLoadStartModule; // +0x10
-  uintptr_t sceKernelDlsym;          // +0x18
-  uint64_t ASLR_Base = 0;            // +0x20
-  char prx_path[256];                 // +0x28
-  int loaded = 0;                     // +0x128
-  uint64_t game_hash = 0;            // +0x12C (padding fait que c'est a +0x130)
-  int frame_delay = 300;             // +0x138
-  int frame_counter = 0;             // +0x13C
+// Structure pour un PRX individuel dans la liste
+struct PRXEntry {
+  char path[256];      // +0x00
+  int frame_delay;     // +0x100
+  int loaded;          // +0x104
+  int _pad;            // +0x108 (alignment)
+};  // Total: 0x10C (268 bytes)
 
+struct GameStuff {
+  uintptr_t scePadReadState;          // +0x00
+  uintptr_t debugout;                  // +0x08
+  uintptr_t sceKernelLoadStartModule;  // +0x10
+  uintptr_t sceKernelDlsym;            // +0x18
+  uint64_t ASLR_Base = 0;              // +0x20
+  int frame_counter = 0;               // +0x28
+  int prx_count = 0;                   // +0x2C
+  PRXEntry prx_list[8];                // +0x30 (max 8 PRX)
+  
   GameStuff(Hijacker &hijacker) noexcept
       : debugout(hijacker.getLibKernelAddress(nid::sceKernelDebugOutText)), 
         sceKernelLoadStartModule(hijacker.getLibKernelAddress(nid::sceKernelLoadStartModule)),
-        sceKernelDlsym(hijacker.getLibKernelAddress(nid::sceKernelDlsym)) {}
+        sceKernelDlsym(hijacker.getLibKernelAddress(nid::sceKernelDlsym)) {
+    // Initialize PRX list
+    for (int i = 0; i < 8; i++) {
+      prx_list[i].path[0] = '\0';
+      prx_list[i].frame_delay = 0;
+      prx_list[i].loaded = 0;
+      prx_list[i]._pad = 0;
+    }
+  }
 };
 
 struct GameBuilder {
   static constexpr size_t SHELLCODE_SIZE = 137;
-  static constexpr size_t SHELLCODE_SIZE_AUTO = 210; // Shellcode avec hash check pour multi-PRX
+  static constexpr size_t SHELLCODE_SIZE_AUTO = 210;
+  static constexpr size_t SHELLCODE_SIZE_MULTI = 175; // Multi-PRX loader
   static constexpr size_t EXTRA_STUFF_ADDR_OFFSET = 2;
 
-  uint8_t shellcode[256]; // Buffer agrandi pour le nouveau shellcode
+  uint8_t shellcode[256];
 
   void setExtraStuffAddr(uintptr_t addr) noexcept {
     *reinterpret_cast<uintptr_t *>(shellcode + EXTRA_STUFF_ADDR_OFFSET) = addr;
@@ -193,8 +208,6 @@ static constexpr GameBuilder BUILDER_TEMPLATE {
 };
 
 // Auto-load shellcode AVEC HASH CHECK (210 bytes)
-// Correspond au code C dans Shellcode.c
-// Permet de charger PLUSIEURS PRX differents (LSO153 + BeachOffline)
 static constexpr GameBuilder BUILDER_TEMPLATE_AUTO {
     0x48, 0xba, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x55, 0x41, 0x57, 0x41, 0x56, 0x41, 0x54, 0x53, 0x48, 0x83,
@@ -219,6 +232,27 @@ static constexpr GameBuilder BUILDER_TEMPLATE_AUTO {
     0x18, 0x5b, 0x41, 0x5c, 0x41, 0x5e, 0x41, 0x5f, 0x5d, 0xc3
 };
 
+// Multi-PRX shellcode (175 bytes) - UN SEUL hook pour TOUS les PRX
+// frame_counter++; for (i=0; i<prx_count; i++) { if (!loaded[i] && frame_counter >= delay[i]) load(prx[i]); }
+static constexpr GameBuilder BUILDER_TEMPLATE_MULTI {
+    0x48, 0xba, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x55, 0x41, 0x57, 0x41, 0x56, 0x41, 0x55, 0x53, 0x48, 0x83,
+    0xec, 0x10, 0x48, 0x89, 0xd3, 0x49, 0x89, 0xf6, 0x41, 0x89,
+    0xff, 0xff, 0x13, 0x89, 0xc5, 0x8b, 0x43, 0x28, 0xff, 0xc0,
+    0x89, 0x43, 0x28, 0x41, 0x89, 0xc5, 0x45, 0x31, 0xff, 0x8b,
+    0x43, 0x2c, 0x85, 0xc0, 0x7e, 0x5f, 0x41, 0x89, 0xc6, 0x4c,
+    0x89, 0xf8, 0x48, 0x69, 0xc0, 0x0c, 0x01, 0x00, 0x00, 0x48,
+    0x8d, 0x4c, 0x03, 0x30, 0x83, 0xb9, 0x04, 0x01, 0x00, 0x00,
+    0x00, 0x75, 0x3f, 0x44, 0x3b, 0xa9, 0x00, 0x01, 0x00, 0x00,
+    0x7c, 0x36, 0x48, 0x89, 0xcf, 0x31, 0xf6, 0x31, 0xd2, 0x31,
+    0xc9, 0x45, 0x31, 0xc0, 0x45, 0x31, 0xc9, 0xff, 0x53, 0x10,
+    0x4c, 0x89, 0xf8, 0x48, 0x69, 0xc0, 0x0c, 0x01, 0x00, 0x00,
+    0x48, 0x8d, 0x4c, 0x03, 0x30, 0xc7, 0x81, 0x04, 0x01, 0x00,
+    0x00, 0x01, 0x00, 0x00, 0x00, 0x41, 0xff, 0xc7, 0x45, 0x39,
+    0xf7, 0x7c, 0xaf, 0x89, 0xe8, 0x48, 0x83, 0xc4, 0x10, 0x5b,
+    0x41, 0x5d, 0x41, 0x5e, 0x41, 0x5f, 0x5d, 0xc3
+};
+
 
 extern "C" int sceSystemServiceKillApp(int, int, int, int);
 extern "C" int sceSystemServiceGetAppId(const char *);
@@ -241,4 +275,5 @@ struct GameInjectorConfig {
 void plugin_log(const char* fmt, ...);
 bool Is_Game_Running(int &BigAppid, const char* title_id);
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay = 300);
+bool HookMultiPRX(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const std::vector<PRXConfig> &prx_list);
 GameInjectorConfig parse_injector_config();

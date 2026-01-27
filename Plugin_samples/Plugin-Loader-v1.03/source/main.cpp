@@ -248,37 +248,22 @@ int main()
 		SuspendApp(pid);
 		usleep(500000);
 
-		// Inject all PRX
-		int success_count = 0;
-		for (const auto& prx : prx_list)
-		{
-			plugin_log("Injecting: %s", prx.path.c_str());
-
-			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
-			{
-				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
-						   prx.path.c_str(), prx.frame_delay);
-				success_count++;
-			}
-			else
-			{
-				plugin_log("FAILED: %s", prx.path.c_str());
-			}
-
-			usleep(100000);
-		}
+		// CRITICAL FIX: Use HookMultiPRX instead of loop
+		// Old method: each HookGame() call OVERWRITES the previous hook
+		// New method: ONE hook handles ALL PRX with individual frame_delay
+		plugin_log("Installing multi-PRX hook...");
+		bool success = HookMultiPRX(executable, text_base, prx_list);
 
 		// Resume game
 		plugin_log("Resuming game...");
 		ResumeApp(pid);
 
 		plugin_log("========================================");
-		plugin_log("Injection complete: %d/%zu PRX loaded",
-				   success_count, prx_list.size());
+		plugin_log("Multi-PRX injection: %s", success ? "SUCCESS" : "FAILED");
 		plugin_log("========================================");
 
-		printf_notification("%d/%zu PRX injected into %s",
-							success_count, prx_list.size(), detected_tid);
+		printf_notification("Multi-PRX %s for %s",
+							success ? "OK" : "FAIL", detected_tid);
 
 		// Wait for game to close (monitor appid changes)
 		plugin_log("Waiting for game to close (monitoring appid %d)...", appid);

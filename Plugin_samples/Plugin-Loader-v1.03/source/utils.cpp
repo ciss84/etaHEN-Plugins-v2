@@ -255,3 +255,94 @@ GameInjectorConfig parse_injector_config()
 	plugin_log("Config parsing complete: %zu games configured", config.games.size());
 	return config;
 }
+
+// Multi-PRX hook - UN SEUL hook pour TOUS les PRX!
+bool HookMultiPRX(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const std::vector<PRXConfig> &prx_list)
+{
+	if (prx_list.empty()) {
+		plugin_log("HookMultiPRX: No PRX to inject");
+		return false;
+	}
+	
+	if (prx_list.size() > 8) {
+		plugin_log("HookMultiPRX: Too many PRX (%zu), max is 8", prx_list.size());
+		return false;
+	}
+	
+	plugin_log("========================================");
+	plugin_log("Multi-PRX Hook: Setting up %zu PRX", prx_list.size());
+	plugin_log("========================================");
+	
+	GameStuff stuff{*hijacker};
+	
+	UniquePtr<SharedLib> lib = hijacker->getLib("libScePad.sprx");
+	plugin_log("libScePad.sprx addr: 0x%llx", lib->imagebase());
+	stuff.scePadReadState = hijacker->getFunctionAddress(lib.get(), nid::scePadReadState);
+	
+	plugin_log("scePadReadState addr: 0x%llx", stuff.scePadReadState);
+	if (stuff.scePadReadState == 0) {
+		plugin_log("FAILED: scePadReadState not found");
+		return false;
+	}
+	
+	stuff.ASLR_Base = alsr_b;
+	stuff.frame_counter = 0;
+	stuff.prx_count = prx_list.size();
+	
+	// Fill PRX list
+	for (size_t i = 0; i < prx_list.size(); i++) {
+		strncpy(stuff.prx_list[i].path, prx_list[i].path.c_str(), 255);
+		stuff.prx_list[i].path[255] = '\0';
+		stuff.prx_list[i].frame_delay = prx_list[i].frame_delay;
+		stuff.prx_list[i].loaded = 0;
+		stuff.prx_list[i]._pad = 0;
+		
+		plugin_log("  [%zu] %s (delay: %d frames = %.1f sec)", 
+		           i, stuff.prx_list[i].path, 
+		           stuff.prx_list[i].frame_delay,
+		           stuff.prx_list[i].frame_delay / 60.0f);
+	}
+	
+	// Allocate shellcode and data
+	auto code = hijacker->getTextAllocator().allocate(GameBuilder::SHELLCODE_SIZE_MULTI);
+	plugin_log("Shellcode addr: 0x%llx (size: %d bytes)", code, GameBuilder::SHELLCODE_SIZE_MULTI);
+	
+	auto stuffAddr = hijacker->getDataAllocator().allocate(sizeof(GameStuff));
+	plugin_log("GameStuff addr: 0x%llx (size: %zu bytes)", stuffAddr, sizeof(GameStuff));
+	
+	// Setup builder
+	GameBuilder builder = BUILDER_TEMPLATE_MULTI;
+	builder.setExtraStuffAddr(stuffAddr);
+	
+	uint8_t shellcode_buffer[256];
+	memcpy(shellcode_buffer, builder.shellcode, GameBuilder::SHELLCODE_SIZE_MULTI);
+	
+	// Write shellcode and data
+	hijacker->write(code, shellcode_buffer);
+	hijacker->write(stuffAddr, stuff);
+	
+	// Hook scePadReadState PLT entry
+	auto meta = hijacker->getEboot()->getMetaData();
+	const auto &plttab = meta->getPltTable();
+	auto index = meta->getSymbolTable().getSymbolIndex(nid::scePadReadState);
+	
+	for (const auto &plt : plttab) {
+		if (ELF64_R_SYM(plt.r_info) == index) {
+			uintptr_t hook_adr = hijacker->getEboot()->imagebase() + plt.r_offset;
+			hijacker->write<uintptr_t>(hook_adr, code);
+			
+			plugin_log("Hook installed at 0x%llx", hook_adr);
+			plugin_log("========================================");
+			plugin_log("SUCCESS! All %zu PRX will auto-load:", prx_list.size());
+			for (size_t i = 0; i < prx_list.size(); i++) {
+				plugin_log("  %s @ frame %d", prx_list[i].path.c_str(), prx_list[i].frame_delay);
+			}
+			plugin_log("========================================");
+			
+			return true;
+		}
+	}
+	
+	plugin_log("FAILED: scePadReadState not in PLT");
+	return false;
+}
