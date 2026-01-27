@@ -263,7 +263,7 @@ GameInjectorConfig parse_injector_config()
 // HookGameMultiPRX - VERSION TEMPORAIRE FALLBACK
 // ============================================================
 // Cette version appelle HookGame() pour chaque PRX
-// ATTENTION: Seul le DERNIER PRX fonctionnera car les hooks s'écrasent!
+// ATTENTION: Seul le DERNIER PRX fonctionnera car les hooks s'ecrasent!
 // Pour la vraie solution multi-PRX, il faut compiler Shellcode_MultiPRX.c
 // ============================================================
 bool HookGameMultiPRX(UniquePtr<Hijacker> &executable, uint64_t text_base, const std::vector<PRXConfig> &prx_list)
@@ -281,7 +281,7 @@ bool HookGameMultiPRX(UniquePtr<Hijacker> &executable, uint64_t text_base, const
 	int success_count = 0;
 	
 	// Appelle l'ancien HookGame() pour chaque PRX
-	// PROBLÈME: Chaque appel écrase le hook précédent!
+	// PROBLEME: Chaque appel ecrase le hook precedent!
 	for (const auto& prx : prx_list)
 	{
 		plugin_log("Installing hook for: %s (frame_delay: %d)", 
