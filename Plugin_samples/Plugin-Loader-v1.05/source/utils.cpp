@@ -270,51 +270,47 @@ GameInjectorConfig parse_injector_config()
 }
 
 // ============================================================
-// HookGameMultiPRX - VERSION TEMPORAIRE FALLBACK
+// HookGameMultiPRX - VERSION SAFE (INSTALLE SEULEMENT LE DERNIER)
 // ============================================================
-// Cette version appelle HookGame() pour chaque PRX
-// ATTENTION: Seul le DERNIER PRX fonctionnera car les hooks s'ecrasent!
-// Pour la vraie solution multi-PRX, il faut compiler Shellcode_MultiPRX.c
+// Cette version n'installe que le DERNIER PRX de la liste
+// pour eviter les hooks qui s'ecrasent et causent le crash
 // ============================================================
 bool HookGameMultiPRX(UniquePtr<Hijacker> &executable, uint64_t text_base, const std::vector<PRXConfig> &prx_list)
 {
-	plugin_log("=== MULTI-PRX HOOK (TEMPORARY FALLBACK MODE) ===");
-	plugin_log("WARNING: Using old method - only last PRX will work!");
-	plugin_log("To fix: compile Shellcode_MultiPRX.c and update this function");
-	
 	if (prx_list.empty())
 	{
 		plugin_log("ERROR: No PRX to inject");
 		return false;
 	}
 	
-	int success_count = 0;
-	
-	// Appelle l'ancien HookGame() pour chaque PRX
-	// PROBLEME: Chaque appel ecrase le hook precedent!
-	for (const auto& prx : prx_list)
+	// VERSION SAFE: Installe SEULEMENT le dernier PRX
+	if (prx_list.size() > 1)
 	{
-		plugin_log("Installing hook for: %s (frame_delay: %d)", 
-		           prx.path.c_str(), prx.frame_delay);
-		
-		if (HookGame(executable, text_base, prx.path.c_str(), true, prx.frame_delay))
+		plugin_log("=== SAFE MODE: Multiple PRX detected ===");
+		plugin_log("WARNING: Installing ONLY the last PRX to avoid crash!");
+		plugin_log("Skipping %zu PRX:", prx_list.size() - 1);
+		for (size_t i = 0; i < prx_list.size() - 1; i++)
 		{
-			plugin_log("Hook installed (but may be overwritten by next PRX)");
-			success_count++;
+			plugin_log("  SKIPPED: %s", prx_list[i].path.c_str());
 		}
-		else
-		{
-			plugin_log("FAILED to install hook for: %s", prx.path.c_str());
-		}
-		
-		usleep(100000);  // 100ms entre chaque
 	}
 	
-	plugin_log("========================================");
-	plugin_log("Fallback: %d/%zu hooks installed", success_count, prx_list.size());
-	plugin_log("Only the LAST PRX (%s) will actually work!", 
-	           prx_list.back().path.c_str());
-	plugin_log("========================================");
+	// Installe seulement le DERNIER PRX
+	const PRXConfig &last_prx = prx_list.back();
 	
-	return (success_count > 0);
+	plugin_log("Installing ONLY: %s (frame_delay: %d)", 
+	           last_prx.path.c_str(), last_prx.frame_delay);
+	
+	bool success = HookGame(executable, text_base, last_prx.path.c_str(), true, last_prx.frame_delay);
+	
+	if (success)
+	{
+		plugin_log("SUCCESS: Hook installed for %s", last_prx.path.c_str());
+	}
+	else
+	{
+		plugin_log("FAILED: Could not install hook for %s", last_prx.path.c_str());
+	}
+	
+	return success;
 }

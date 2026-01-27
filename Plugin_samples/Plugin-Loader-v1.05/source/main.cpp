@@ -239,7 +239,7 @@ int main()
 		// Suspend game
 		plugin_log("Suspending game...");
 		SuspendApp(pid);
-		usleep(500000);
+		usleep(500000); // 500ms après suspend
 
 		// ========================================
 		// MULTI-PRX INJECTION - ONE HOOK FOR ALL
@@ -261,6 +261,8 @@ int main()
 		{
 			plugin_log("FAILED: Could not install unified hook");
 		}
+
+		usleep(500000); // 500ms après injection
 
 		// Resume game
 		plugin_log("Resuming game...");
