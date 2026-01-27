@@ -246,7 +246,7 @@ int main()
 		// Suspend game
 		plugin_log("Suspending game...");
 		SuspendApp(pid);
-		usleep(100000);
+		//usleep(100000);
 
 		// Inject all PRX
 		int success_count = 0;
