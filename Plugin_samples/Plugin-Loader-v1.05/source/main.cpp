@@ -257,8 +257,7 @@ int main()
 			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
 			{
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
-						   prx.path.c_str(), prx.frame_delay);
-				Patchloaded = true;		   
+						   prx.path.c_str(), prx.frame_delay);	   
 				success_count++;
 				break;
 			}

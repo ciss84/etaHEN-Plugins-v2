@@ -12,7 +12,6 @@
 #include "hijacker/hijacker.hpp"
 #include "notify.hpp"
 #include "backtrace.hpp"
-#include <stdbool.h>
 
 #define ORBIS_PAD_PORT_TYPE_STANDARD 0
 #define ORBIS_PAD_PORT_TYPE_SPECIAL 2
@@ -243,4 +242,3 @@ void plugin_log(const char* fmt, ...);
 bool Is_Game_Running(int &BigAppid, const char* title_id);
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay = 300);
 GameInjectorConfig parse_injector_config();
-bool Patchloaded = false;
