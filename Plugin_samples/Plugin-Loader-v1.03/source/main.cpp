@@ -132,11 +132,11 @@ int32_t patch_SetFlipRate(Hijacker &hijacker, const char* game_name) {
 }
 
 // Structure to manage multiple PRX files
-struct PRXConfig {
+/*struct PRXConfig {
     const char* path;
     const char* name;
     bool required;
-};
+};*/
 
 uintptr_t kernel_base = 0;
 
