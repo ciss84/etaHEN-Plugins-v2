@@ -73,7 +73,7 @@ int main()
 		sigaction(i, &new_SIG_action, NULL);
 
 	plugin_log("Plugin Loader v1.02 ready - monitoring games");
-	printf_notification("Plugin Loader v1.02 v1.00 started");
+	printf_notification("Plugin Loader v1.02 started");
 
 	int last_attempted_appid = -1;  // Track last appid we attempted (successful or not)
 
