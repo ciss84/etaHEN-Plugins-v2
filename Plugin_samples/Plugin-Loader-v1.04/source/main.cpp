@@ -265,9 +265,7 @@ int main()
 				plugin_log("FAILED: %s", prx.path.c_str());
 			}
 
-			//usleep(100000);
-			//usleep(1000000);
-			sleep(5);
+			usleep(1000000);
 		}
 
 		// Resume game
