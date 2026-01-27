@@ -267,7 +267,7 @@ int main()
 
 			//usleep(100000);
 			//usleep(1000000);
-			sleep(2);
+			sleep(5);
 		}
 
 		// Resume game
