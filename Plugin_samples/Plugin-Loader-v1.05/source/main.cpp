@@ -258,7 +258,7 @@ int main()
 			{
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
 						   prx.path.c_str(), prx.frame_delay);
-				loaded = true;		   
+				Patchloaded = true;		   
 				success_count++;
 				break;
 			}
