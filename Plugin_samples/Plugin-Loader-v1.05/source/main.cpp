@@ -251,11 +251,11 @@ int main()
          
 			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
 			{
-			  plugin_log(".prx loaded successfully!");
-        printf_notification(".prx loaded successfully");
-				//plugin_log("SUCCESS: %s injected (frame_delay: %d)",
-						   //prx.path.c_str(), prx.frame_delay);
-				//success_count++;
+				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
+						   prx.path.c_str(), prx.frame_delay);
+				//printf_notification("SUCCESS: %s injected (frame_delay: %d)",
+				       //prx.path.c_str(), prx.frame_delay);		   
+				success_count++;
 			}
 			else
 			{
