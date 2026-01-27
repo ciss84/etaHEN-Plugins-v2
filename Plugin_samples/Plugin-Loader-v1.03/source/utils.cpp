@@ -91,7 +91,7 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   strncpy(stuff.prx_path, prx_path, sizeof(stuff.prx_path) - 1);
   stuff.prx_path[sizeof(stuff.prx_path) - 1] = '\0';
   stuff.frame_delay = frame_delay;
-  stuff.frame_counter = 0; // Reset counter
+  stuff.frame_counter = 0;
   
   plugin_log("GameStuff configured:");
   plugin_log("  - prx_path: %s", stuff.prx_path);
@@ -132,19 +132,18 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   return false;
 }
 
+// Parse .ini with suspend_game flag
 GameInjectorConfig parse_injector_config()
 {
 	GameInjectorConfig config;
 
-	// Use POSIX open instead of std::ifstream for PS5 compatibility
 	int fd = open("/data/PluginLoader/PluginLoader.ini", O_RDONLY);
 	if (fd < 0)
 	{
-		plugin_log("No PluginLoader.ini found at /data/PluginLoader/PluginLoader.ini");
+		plugin_log("No PluginLoader.ini found");
 		return config;
 	}
 
-	// Read entire file (max 8KB config)
 	char buffer[8192];
 	int bytes_read = read(fd, buffer, sizeof(buffer) - 1);
 	close(fd);
@@ -156,77 +155,61 @@ GameInjectorConfig parse_injector_config()
 	}
 	buffer[bytes_read] = '\0';
 
-	plugin_log("Config file read successfully: %d bytes", bytes_read);
-
-	// Parse buffer line by line manually
 	std::string current_tid = "";
 	char* ptr = buffer;
 	char* line_start = ptr;
 
 	while (ptr < buffer + bytes_read)
 	{
-		// Find end of line
 		if (*ptr == '\n' || *ptr == '\r' || ptr >= buffer + bytes_read - 1)
 		{
-			// Extract line
 			size_t line_len = ptr - line_start;
 			if (ptr >= buffer + bytes_read - 1 && *ptr != '\n' && *ptr != '\r')
-			{
 				line_len++;
-			}
 			
 			std::string line(line_start, line_len);
 			
-			// Trim whitespace
+			// Trim
 			size_t start = line.find_first_not_of(" \t\r");
 			size_t end = line.find_last_not_of(" \t\r");
-			
 			if (start != std::string::npos && end != std::string::npos)
-			{
 				line = line.substr(start, end - start + 1);
-			}
 			else
-			{
 				line = "";
-			}
 
-			// Skip empty lines and comments
+			// Skip comments
 			if (!line.empty() && line[0] != ';' && line[0] != '#')
 			{
-				// Section header [TID]
+				// [TID]
 				if (line[0] == '[' && line[line.length()-1] == ']')
 				{
 					current_tid = line.substr(1, line.length()-2);
-					plugin_log("Config: Found section [%s]", current_tid.c_str());
+					plugin_log("Config: [%s]", current_tid.c_str());
 				}
-				// PRX line
+				// PRX line: file.prx:delay=true/false
 				else if (!current_tid.empty())
 				{
-					// Format: filename.prx:frame_delay=true/false
-					// Example: BeachMenu100.prx:120=true (suspend game)
-					// Example: LSO100.prx:-30=false (no suspend)
 					size_t colon_pos = line.find(':');
 					std::string prx_file;
 					int frame_delay = 60;
-					bool suspend_game = false;  // Default: no suspend
+					bool suspend_game = false;
 
 					if (colon_pos != std::string::npos)
 					{
 						prx_file = line.substr(0, colon_pos);
 						std::string delay_part = line.substr(colon_pos + 1);
 						
-						// Check for =true or =false
+						// Check =true/=false
 						size_t equals_pos = delay_part.find('=');
 						if (equals_pos != std::string::npos)
 						{
 							frame_delay = atoi(delay_part.substr(0, equals_pos).c_str());
-							std::string suspend_str = delay_part.substr(equals_pos + 1);
-							suspend_game = (suspend_str == "true" || suspend_str == "TRUE" || suspend_str == "1");
+							std::string flag = delay_part.substr(equals_pos + 1);
+							suspend_game = (flag == "true" || flag == "TRUE" || flag == "1");
 						}
 						else
 						{
 							frame_delay = atoi(delay_part.c_str());
-							suspend_game = false;
 						}
 					}
 					else
@@ -234,7 +217,6 @@ GameInjectorConfig parse_injector_config()
 						prx_file = line;
 					}
 
-					// Build full path
 					std::string full_path = "/data/PluginLoader/" + prx_file;
 
 					PRXConfig prx;
@@ -244,25 +226,19 @@ GameInjectorConfig parse_injector_config()
 
 					config.games[current_tid].push_back(prx);
 
-					plugin_log("Config: [%s] -> %s (delay: %d frames, suspend: %s)",
+					plugin_log("Config: [%s] -> %s (delay: %d, suspend: %s)",
 							   current_tid.c_str(), full_path.c_str(), frame_delay,
 							   suspend_game ? "YES" : "NO");
 				}
 			}
 
-			// Move to next line
+			// Next line
 			if (*ptr == '\r' && ptr + 1 < buffer + bytes_read && *(ptr + 1) == '\n')
-			{
-				ptr += 2;  // Skip \r\n
-			}
+				ptr += 2;
 			else if (*ptr == '\n' || *ptr == '\r')
-			{
-				ptr++;  // Skip \n or \r
-			}
+				ptr++;
 			else
-			{
-				ptr++;  // End of buffer
-			}
+				ptr++;
 			line_start = ptr;
 		}
 		else
@@ -271,6 +247,6 @@ GameInjectorConfig parse_injector_config()
 		}
 	}
 
-	plugin_log("Config parsing complete: %zu games configured", config.games.size());
+	plugin_log("Config parsed: %zu games", config.games.size());
 	return config;
 }
