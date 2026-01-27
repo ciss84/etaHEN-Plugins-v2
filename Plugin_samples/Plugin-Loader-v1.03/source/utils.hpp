@@ -229,7 +229,7 @@ extern "C" int _sceApplicationGetAppId(int pid, int *appId);
 #include <vector>
 
 // Config structure for injector
-struct PRXConfig {
+/*struct PRXConfig {
 	std::string path;
 	int frame_delay;
 	bool suspend_game;  // true = suspend game during injection
@@ -237,7 +237,7 @@ struct PRXConfig {
 
 struct GameInjectorConfig {
 	std::map<std::string, std::vector<PRXConfig>> games;
-};
+};*/
 
 void plugin_log(const char* fmt, ...);
 bool Is_Game_Running(int &BigAppid, const char* title_id);
