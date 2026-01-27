@@ -180,7 +180,7 @@ int main()
 		
 		int alive_count = 0;
 		int dead_count = 0;
-		for (int i = 0; i < 20; i++)
+		for (int i = 0; i < 5; i++)
 		{
 			usleep(100000); // Wait 100ms
 			bool running = IsProcessRunning(pid);
@@ -246,7 +246,7 @@ int main()
 		// Suspend game
 		plugin_log("Suspending game...");
 		SuspendApp(pid);
-		usleep(1000000);
+		usleep(500000);
 
 		// Inject all PRX
 		int success_count = 0;
