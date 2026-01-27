@@ -249,6 +249,7 @@ int main()
 		usleep(500000);
 
 		// Inject all PRX
+		bool loaded = false;
 		int success_count = 0;
 		for (const auto& prx : prx_list)
 		{
@@ -258,7 +259,9 @@ int main()
 			{
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
 						   prx.path.c_str(), prx.frame_delay);
+				loaded = true;		   
 				success_count++;
+				break;
 			}
 			else
 			{
