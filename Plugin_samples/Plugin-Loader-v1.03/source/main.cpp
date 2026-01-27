@@ -180,7 +180,7 @@ int main()
 		
 		int alive_count = 0;
 		int dead_count = 0;
-		for (int i = 0; i < 10; i++)
+		for (int i = 0; i < 5; i++)
 		{
 			usleep(100000); // Wait 100ms
 			bool running = IsProcessRunning(pid);
