@@ -4,13 +4,6 @@
 #include <string>
 #include <ps5/kernel.h>
 
-void sig_handler(int signo)
-{
-	printf_notification("Plugin Loader v1.05 crashed with signal %d", signo);
-	printBacktraceForCrash();
-	exit(-1);
-}
-
 extern "C"
 {
 	int sceSystemServiceGetAppIdOfRunningBigApp();
@@ -19,6 +12,13 @@ extern "C"
 	int32_t sceKernelSuspendProcess(pid_t pid);
 	int32_t sceKernelPrepareToResumeProcess(pid_t pid);
 	int32_t sceKernelResumeProcess(pid_t pid);
+}
+
+void sig_handler(int signo)
+{
+	printf_notification("Plugin Loader v1.05 crashed with signal %d", signo);
+	printBacktraceForCrash();
+	exit(-1);
 }
 
 bool Get_Running_App_TID(std::string &title_id, int &BigAppid)
@@ -232,8 +232,8 @@ int main()
 
 		// Suspend game
 		plugin_log("Suspending game...");
-    sceKernelPrepareToSuspendProcess(pid);
-    sceKernelSuspendProcess(pid);
+	  sceKernelPrepareToSuspendProcess(pid);
+	  sceKernelSuspendProcess(pid);
 		usleep(500000);
 
 		// Inject all PRX
@@ -241,26 +241,27 @@ int main()
 		for (const auto& prx : prx_list)
 		{
 			plugin_log("Injecting: %s", prx.path.c_str());
-         
+
 			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
 			{
 				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
-						   prx.path.c_str(), prx.frame_delay);	   
+						   prx.path.c_str(), prx.frame_delay);
 				success_count++;
 			}
 			else
 			{
 				plugin_log("FAILED: %s", prx.path.c_str());
 			}
-		 usleep(750000);
+
+			usleep(750000);
 		}
 
 		// Resume game
 		plugin_log("Resuming game...");
-	  usleep(600000);
+	  usleep(500000);
 	  sceKernelPrepareToResumeProcess(pid);
 	  sceKernelResumeProcess(pid);
-	  
+
 		plugin_log("========================================");
 		plugin_log("Injection complete: %d/%zu PRX loaded",
 				   success_count, prx_list.size());
