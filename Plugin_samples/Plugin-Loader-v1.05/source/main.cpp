@@ -260,7 +260,7 @@ int main()
             plugin_log("Re-suspending for next injection...");
             sceKernelPrepareToSuspendProcess(pid);
             sceKernelSuspendProcess(pid);
-            usleep(750000);
+            usleep(1000000);
         }
       }
       else
