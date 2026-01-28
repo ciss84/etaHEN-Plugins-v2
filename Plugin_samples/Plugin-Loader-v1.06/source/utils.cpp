@@ -66,8 +66,23 @@ bool Is_Game_Running(int &BigAppid, const char* title_id)
 
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay) 
 {
+  // Variables static pour tracker le hook entre les PRX du MÊME jeu
+  static uintptr_t first_stuffAddr = 0;
+  static bool already_hooked = false;
+  static uint64_t last_imagebase = 0; // NEW: Track game instance
+  
   plugin_log("Patching Game Now (PRX: %s, Auto-load: %s, Frame delay: %d frames)", 
              prx_path, auto_load ? "YES" : "NO", frame_delay);
+
+  // RESET si nouveau jeu détecté (imagebase différent)
+  uint64_t current_imagebase = hijacker->getEboot()->imagebase();
+  if (current_imagebase != last_imagebase) {
+    plugin_log("NEW GAME DETECTED - Resetting hook state (old: 0x%llx, new: 0x%llx)", 
+               last_imagebase, current_imagebase);
+    already_hooked = false;
+    first_stuffAddr = 0;
+    last_imagebase = current_imagebase;
+  }
 
   GameBuilder builder = auto_load ? BUILDER_TEMPLATE_AUTO : BUILDER_TEMPLATE;
   size_t shellcode_size = auto_load ? GameBuilder::SHELLCODE_SIZE_AUTO : GameBuilder::SHELLCODE_SIZE;
@@ -91,7 +106,7 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   strncpy(stuff.prx_path, prx_path, sizeof(stuff.prx_path) - 1);
   stuff.prx_path[sizeof(stuff.prx_path) - 1] = '\0';
   stuff.frame_delay = frame_delay;
-  stuff.frame_counter = 0; // Reset counter
+  stuff.frame_counter = 0;
   
   plugin_log("GameStuff configured:");
   plugin_log("  - prx_path: %s", stuff.prx_path);
@@ -110,18 +125,36 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   
   for (const auto &plt : plttab) {
     if (ELF64_R_SYM(plt.r_info) == index) {
+      uintptr_t hook_adr = hijacker->getEboot()->imagebase() + plt.r_offset;
+      
+      // If already hooked (same game, multiple PRX), UPDATE GameStuff
+      if (already_hooked && first_stuffAddr != 0) {
+        plugin_log("Hook already exists - UPDATING GameStuff at 0x%llx for new PRX", first_stuffAddr);
+        
+        // OVERWRITE GameStuff with the new PRX info
+        hijacker->write(first_stuffAddr, stuff);
+        plugin_log("GameStuff UPDATED with new PRX: %s (frame_delay: %d)", stuff.prx_path, stuff.frame_delay);
+        
+        return true;
+      }
+      
+      // First hook for this game - create normally
       builder.setExtraStuffAddr(stuffAddr);
       
-      uint8_t shellcode_buffer[GameBuilder::SHELLCODE_SIZE];
+      uint8_t shellcode_buffer[256];
+      memset(shellcode_buffer, 0, sizeof(shellcode_buffer));
       memcpy(shellcode_buffer, builder.shellcode, shellcode_size);
       
       hijacker->write(code, shellcode_buffer);
       hijacker->write(stuffAddr, stuff);
 
-      uintptr_t hook_adr = hijacker->getEboot()->imagebase() + plt.r_offset;
-
       hijacker->write<uintptr_t>(hook_adr, code);
-      plugin_log("hook addr: 0x%llx", hook_adr);
+      
+      // Mark as hooked for THIS game
+      already_hooked = true;
+      first_stuffAddr = stuffAddr;
+      
+      plugin_log("hook addr: 0x%llx (FIRST HOOK for imagebase 0x%llx)", hook_adr, current_imagebase);
       plugin_log("PRX injection setup completed successfully!");
 
       return true;
