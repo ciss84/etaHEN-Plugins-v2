@@ -167,7 +167,7 @@ int main()
 		
 		int alive_count = 0;
 		int dead_count = 0;
-		for (int i = 0; i < 6; i++)
+		for (int i = 0; i < 5; i++)
 		{
 			usleep(100000); // Wait 100ms
 			bool running = IsProcessRunning(pid);
@@ -260,7 +260,7 @@ int main()
             plugin_log("Re-suspending for next injection...");
             sceKernelPrepareToSuspendProcess(pid);
             sceKernelSuspendProcess(pid);
-            usleep(1000000);
+            usleep(1500000);
         }
       }
       else
