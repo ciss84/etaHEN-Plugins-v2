@@ -108,20 +108,42 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   const auto &plttab = meta->getPltTable();
   auto index = meta->getSymbolTable().getSymbolIndex(nid::scePadReadState);
   
+  // CRITICAL FIX: Check if already hooked to avoid overwriting existing hook
+  static uintptr_t first_stuffAddr = 0;
+  static bool already_hooked = false;
+  
   for (const auto &plt : plttab) {
     if (ELF64_R_SYM(plt.r_info) == index) {
+      uintptr_t hook_adr = hijacker->getEboot()->imagebase() + plt.r_offset;
+      
+      // If already hooked, just UPDATE the existing GameStuff
+      if (already_hooked && first_stuffAddr != 0) {
+        plugin_log("Hook already exists - UPDATING GameStuff at 0x%llx for new PRX", first_stuffAddr);
+        
+        // OVERWRITE GameStuff with the new PRX info
+        hijacker->write(first_stuffAddr, stuff);
+        plugin_log("GameStuff UPDATED with new PRX: %s (frame_delay: %d)", stuff.prx_path, stuff.frame_delay);
+        
+        return true;
+      }
+      
+      // First hook - create normally
       builder.setExtraStuffAddr(stuffAddr);
       
-      uint8_t shellcode_buffer[GameBuilder::SHELLCODE_SIZE];
+      uint8_t shellcode_buffer[256];
+      memset(shellcode_buffer, 0, sizeof(shellcode_buffer));
       memcpy(shellcode_buffer, builder.shellcode, shellcode_size);
       
       hijacker->write(code, shellcode_buffer);
       hijacker->write(stuffAddr, stuff);
 
-      uintptr_t hook_adr = hijacker->getEboot()->imagebase() + plt.r_offset;
-
       hijacker->write<uintptr_t>(hook_adr, code);
-      plugin_log("hook addr: 0x%llx", hook_adr);
+      
+      // Mark as hooked
+      already_hooked = true;
+      first_stuffAddr = stuffAddr;
+      
+      plugin_log("hook addr: 0x%llx (FIRST HOOK)", hook_adr);
       plugin_log("PRX injection setup completed successfully!");
 
       return true;
