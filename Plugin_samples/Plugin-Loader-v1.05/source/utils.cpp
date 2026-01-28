@@ -156,14 +156,14 @@ bool Is_Game_Running(int &BigAppid, const char* title_id)
 
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay) 
 {
-  // Variables static pour tracker le hook entre les PRX du MÊME jeu
+  // Variables static pour tracker le hook entre les PRX du MEME jeu
   static uintptr_t first_stuffAddr = 0;
   static bool already_hooked = false;
   static pid_t last_pid = 0; // CHANGE: Track PID instead of imagebase
   
   plugin_log("Patching Game Now (PRX: %s, Frame delay: %d frames)", prx_path, frame_delay);
 
-  // RESET si nouveau processus détecté (PID change)
+  // RESET si nouveau processus detecte (PID change)
   pid_t current_pid = hijacker->getPid();
   if (current_pid != last_pid) {
     plugin_log("=== NEW GAME PROCESS DETECTED ===");
