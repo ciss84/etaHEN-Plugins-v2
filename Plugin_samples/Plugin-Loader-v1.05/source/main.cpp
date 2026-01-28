@@ -236,6 +236,47 @@ int main()
 	  sceKernelSuspendProcess(pid);
 		usleep(500000);
 
+    // Inject all PRX
+    int success_count = 0;
+    for (const auto& prx : prx_list)
+    {
+      plugin_log("Injecting: %s", prx.path.c_str());
+
+    if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
+    {
+        plugin_log("SUCCESS: %s injected", prx.path.c_str());
+        success_count++;
+        
+        // RESUME pour laisser ce PRX se charger
+        plugin_log("Resuming game to load %s...", prx.path.c_str());
+        sceKernelPrepareToResumeProcess(pid);
+        sceKernelResumeProcess(pid);
+        
+        // Attends que le PRX se charge (~2-3 secondes)
+        sleep(3);
+        
+        // Re-suspend pour la prochaine injection
+        if (&prx != &prx_list.back()) { // Si pas le dernier
+            plugin_log("Re-suspending for next injection...");
+            sceKernelPrepareToSuspendProcess(pid);
+            sceKernelSuspendProcess(pid);
+            usleep(500000);
+        }
+      }
+      else
+      {
+          plugin_log("FAILED: %s", prx.path.c_str());
+      }
+    }
+
+    plugin_log("All injections complete");
+
+		// Suspend game
+		/*plugin_log("Suspending game...");
+	  sceKernelPrepareToSuspendProcess(pid);
+	  sceKernelSuspendProcess(pid);
+		usleep(500000);
+
 		// Inject all PRX
 		int success_count = 0;
 		for (const auto& prx : prx_list)
@@ -254,7 +295,7 @@ int main()
 			}
 
 			usleep(750000);
-		}
+		}*/
 
 		// Resume game
 		plugin_log("Resuming game...");
