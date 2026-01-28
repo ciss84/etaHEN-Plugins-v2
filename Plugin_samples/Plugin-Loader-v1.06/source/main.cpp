@@ -270,7 +270,7 @@ int main()
         if (&prx != &prx_list.back()) { // Si pas le dernier
             plugin_log("Re-suspending for next injection...");
             SuspendApp(pid);
-            usleep(2000000);
+            usleep(3000000);
         }
       }
       else
