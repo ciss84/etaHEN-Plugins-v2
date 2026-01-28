@@ -3,7 +3,6 @@
 #include <signal.h>
 #include <string>
 #include <ps5/kernel.h>
-#define PS_LOGO "\xEF\x91\xB7"
 
 extern "C"
 {
@@ -17,7 +16,7 @@ extern "C"
 
 void sig_handler(int signo)
 {
-  printf_notification("Plugin Loader v1.06 crashed with signal %d " PS_LOGO, signo);
+  printf_notification("Plugin Loader v1.06 crashed with signal %d", signo);
 	printBacktraceForCrash();
 	exit(-1);
 }
@@ -61,7 +60,7 @@ int main()
 		sigaction(i, &new_SIG_action, NULL);
 
 	plugin_log("Plugin Loader v1.06 ready - monitoring games");
-	printf_notification("Plugin Loader v1.06 started" PS_LOGO);
+	printf_notification("Plugin Loader v1.06 started ");
 
 	int last_attempted_appid = -1;  // Track last appid we attempted (successful or not)
 
