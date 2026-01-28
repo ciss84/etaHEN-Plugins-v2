@@ -41,19 +41,6 @@ bool IsProcessRunning(pid_t pid)
 	return (_sceApplicationGetAppId(pid, &bappid) >= 0);
 }
 
-static void SuspendApp(pid_t pid)
-{
-	sceKernelPrepareToSuspendProcess(pid);
-	sceKernelSuspendProcess(pid);
-}
-
-static void ResumeApp(pid_t pid)
-{
-	usleep(500000);
-	sceKernelPrepareToResumeProcess(pid);
-	sceKernelResumeProcess(pid);
-}
-
 uintptr_t kernel_base = 0;
 
 int main()
@@ -245,7 +232,8 @@ int main()
 
 		// Suspend game
 		plugin_log("Suspending game...");
-		SuspendApp(pid);
+	  sceKernelPrepareToSuspendProcess(pid);
+	  sceKernelSuspendProcess(pid);
 		usleep(500000);
 
     // Inject all PRX
@@ -261,7 +249,8 @@ int main()
         
         // RESUME pour laisser ce PRX se charger
         plugin_log("Resuming game to load %s...", prx.path.c_str());
-        ResumeApp(pid);
+        sceKernelPrepareToResumeProcess(pid);
+        sceKernelResumeProcess(pid);
         
         // Attends que le PRX se charge (~2-3 secondes)
         sleep(3);
@@ -269,8 +258,9 @@ int main()
         // Re-suspend pour la prochaine injection
         if (&prx != &prx_list.back()) { // Si pas le dernier
             plugin_log("Re-suspending for next injection...");
-            SuspendApp(pid);
-            usleep(3000000);
+            sceKernelPrepareToSuspendProcess(pid);
+            sceKernelSuspendProcess(pid);
+            usleep(2000000);
         }
       }
       else
@@ -279,9 +269,13 @@ int main()
       }
     }
 
+    plugin_log("All injections complete");
+
 		// Resume game
 		plugin_log("Resuming game...");
-		ResumeApp(pid);
+	  usleep(500000);
+	  sceKernelPrepareToResumeProcess(pid);
+	  sceKernelResumeProcess(pid);
 
 		plugin_log("========================================");
 		plugin_log("Injection complete: %d/%zu PRX loaded",
