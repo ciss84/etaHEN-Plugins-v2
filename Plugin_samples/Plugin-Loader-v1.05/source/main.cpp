@@ -260,7 +260,7 @@ int main()
             plugin_log("Re-suspending for next injection...");
             sceKernelPrepareToSuspendProcess(pid);
             sceKernelSuspendProcess(pid);
-            usleep(500000);
+            usleep(750000);
         }
       }
       else
@@ -270,32 +270,6 @@ int main()
     }
 
     plugin_log("All injections complete");
-
-		// Suspend game
-		/*plugin_log("Suspending game...");
-	  sceKernelPrepareToSuspendProcess(pid);
-	  sceKernelSuspendProcess(pid);
-		usleep(500000);
-
-		// Inject all PRX
-		int success_count = 0;
-		for (const auto& prx : prx_list)
-		{
-			plugin_log("Injecting: %s", prx.path.c_str());
-
-			if (HookGame(executable, text_base, prx.path.c_str(), false, prx.frame_delay))
-			{
-				plugin_log("SUCCESS: %s injected (frame_delay: %d)",
-						   prx.path.c_str(), prx.frame_delay);
-				success_count++;
-			}
-			else
-			{
-				plugin_log("FAILED: %s", prx.path.c_str());
-			}
-
-			usleep(750000);
-		}*/
 
 		// Resume game
 		plugin_log("Resuming game...");
