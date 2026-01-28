@@ -156,39 +156,34 @@ bool Is_Game_Running(int &BigAppid, const char* title_id)
 
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay) 
 {
-  // Variables static pour tracker le hook entre les PRX du MEME jeu
+  // Variables static pour tracker le hook entre les PRX du MÊME jeu
   static uintptr_t first_stuffAddr = 0;
   static bool already_hooked = false;
-  static uint64_t last_imagebase = 0; // NEW: Track game instance
+  static pid_t last_pid = 0; // CHANGE: Track PID instead of imagebase
   
-  plugin_log("Patching Game Now (PRX: %s, Auto-load: %s, Frame delay: %d frames)", 
-             prx_path, auto_load ? "YES" : "NO", frame_delay);
+  plugin_log("Patching Game Now (PRX: %s, Frame delay: %d frames)", prx_path, frame_delay);
 
-  // RESET si nouveau jeu dEtecte (imagebase diffErent)
-  uint64_t current_imagebase = hijacker->getEboot()->imagebase();
-  if (current_imagebase != last_imagebase) {
-    plugin_log("NEW GAME DETECTED - Resetting hook state (old: 0x%llx, new: 0x%llx)", 
-               last_imagebase, current_imagebase);
+  // RESET si nouveau processus détecté (PID change)
+  pid_t current_pid = hijacker->getPid();
+  if (current_pid != last_pid) {
+    plugin_log("=== NEW GAME PROCESS DETECTED ===");
+    plugin_log("Old PID: %d, New PID: %d", last_pid, current_pid);
+    plugin_log("Resetting hook state for new game instance");
     already_hooked = false;
     first_stuffAddr = 0;
-    last_imagebase = current_imagebase;
+    last_pid = current_pid;
   }
 
   GameBuilder builder = auto_load ? BUILDER_TEMPLATE_AUTO : BUILDER_TEMPLATE;
   size_t shellcode_size = auto_load ? GameBuilder::SHELLCODE_SIZE_AUTO : GameBuilder::SHELLCODE_SIZE;
   
-  plugin_log("Using shellcode size: %zu bytes (auto-load: %s)", 
-             shellcode_size, auto_load ? "YES with frame delay" : "NO");
-  
   GameStuff stuff{*hijacker};
 
   UniquePtr<SharedLib> lib = hijacker->getLib("libScePad.sprx");
-  plugin_log("libScePad.sprx addr: 0x%llx", lib->imagebase());
   stuff.scePadReadState = hijacker->getFunctionAddress(lib.get(), nid::scePadReadState);
 
-  plugin_log("scePadReadState addr: 0x%llx", stuff.scePadReadState);
   if (stuff.scePadReadState == 0) {
-    plugin_log("failed to locate scePadReadState");
+    plugin_log("FAILED: scePadReadState not found");
     return false;
   }
 
@@ -197,18 +192,11 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   stuff.prx_path[sizeof(stuff.prx_path) - 1] = '\0';
   stuff.frame_delay = frame_delay;
   stuff.frame_counter = 0;
+  stuff.loaded = 0;
+  stuff.game_hash = 0;
   
-  plugin_log("GameStuff configured:");
-  plugin_log("  - prx_path: %s", stuff.prx_path);
-  plugin_log("  - frame_delay: %d frames (~%.1f seconds at 60fps)", 
-             frame_delay, frame_delay / 60.0f);
-  plugin_log("  - frame_counter: %d (initial)", stuff.frame_counter);
+  plugin_log("PRX: %s, Delay: %d frames", stuff.prx_path, stuff.frame_delay);
 
-  auto code = hijacker->getTextAllocator().allocate(shellcode_size);
-  plugin_log("shellcode addr: 0x%llx (size: %zu bytes)", code, shellcode_size);
-  auto stuffAddr = hijacker->getDataAllocator().allocate(sizeof(GameStuff));
-  plugin_log("GameStuff addr: 0x%llx (size: %zu bytes)", stuffAddr, sizeof(GameStuff));
-  
   auto meta = hijacker->getEboot()->getMetaData();
   const auto &plttab = meta->getPltTable();
   auto index = meta->getSymbolTable().getSymbolIndex(nid::scePadReadState);
@@ -217,18 +205,21 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
     if (ELF64_R_SYM(plt.r_info) == index) {
       uintptr_t hook_adr = hijacker->getEboot()->imagebase() + plt.r_offset;
       
-      // If already hooked (same game, multiple PRX), UPDATE GameStuff
+      // Si hook existe pour CE processus, UPDATE GameStuff
       if (already_hooked && first_stuffAddr != 0) {
-        plugin_log("Hook already exists - UPDATING GameStuff at 0x%llx for new PRX", first_stuffAddr);
-        
-        // OVERWRITE GameStuff with the new PRX info
+        plugin_log("Hook exists for PID %d - UPDATING GameStuff at 0x%llx", current_pid, first_stuffAddr);
         hijacker->write(first_stuffAddr, stuff);
-        plugin_log("GameStuff UPDATED with new PRX: %s (frame_delay: %d)", stuff.prx_path, stuff.frame_delay);
-        
+        plugin_log("GameStuff UPDATED: %s", stuff.prx_path);
         return true;
       }
       
-      // First hook for this game - create normally
+      // Premier hook pour CE processus
+      plugin_log("Creating FIRST hook for PID %d", current_pid);
+      auto code = hijacker->getTextAllocator().allocate(shellcode_size);
+      auto stuffAddr = hijacker->getDataAllocator().allocate(sizeof(GameStuff));
+      
+      plugin_log("Shellcode: 0x%llx, GameStuff: 0x%llx", code, stuffAddr);
+      
       builder.setExtraStuffAddr(stuffAddr);
       
       uint8_t shellcode_buffer[256];
@@ -237,21 +228,18 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
       
       hijacker->write(code, shellcode_buffer);
       hijacker->write(stuffAddr, stuff);
-
       hijacker->write<uintptr_t>(hook_adr, code);
       
-      // Mark as hooked for THIS game
       already_hooked = true;
       first_stuffAddr = stuffAddr;
       
-      plugin_log("hook addr: 0x%llx (FIRST HOOK for imagebase 0x%llx)", hook_adr, current_imagebase);
-      plugin_log("PRX injection setup completed successfully!");
-
+      plugin_log("Hook created at PLT 0x%llx -> shellcode 0x%llx", hook_adr, code);
+      plugin_log("SUCCESS!");
       return true;
     }
   }
   
-  plugin_log("Failed to find scePadReadState in PLT table");
+  plugin_log("FAILED: scePadReadState not in PLT table");
   return false;
 }
 
