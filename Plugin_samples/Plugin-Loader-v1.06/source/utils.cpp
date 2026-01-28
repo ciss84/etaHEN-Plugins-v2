@@ -66,7 +66,7 @@ bool Is_Game_Running(int &BigAppid, const char* title_id)
 
 bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_path, bool auto_load, int frame_delay) 
 {
-  // Variables static pour tracker le hook entre les PRX du MÊME jeu
+  // Variables static pour tracker le hook entre les PRX du MEME jeu
   static uintptr_t first_stuffAddr = 0;
   static bool already_hooked = false;
   static uint64_t last_imagebase = 0; // NEW: Track game instance
@@ -74,7 +74,7 @@ bool HookGame(UniquePtr<Hijacker> &hijacker, uint64_t alsr_b, const char* prx_pa
   plugin_log("Patching Game Now (PRX: %s, Auto-load: %s, Frame delay: %d frames)", 
              prx_path, auto_load ? "YES" : "NO", frame_delay);
 
-  // RESET si nouveau jeu détecté (imagebase différent)
+  // RESET si nouveau jeu dEtecte (imagebase diffErent)
   uint64_t current_imagebase = hijacker->getEboot()->imagebase();
   if (current_imagebase != last_imagebase) {
     plugin_log("NEW GAME DETECTED - Resetting hook state (old: 0x%llx, new: 0x%llx)", 
