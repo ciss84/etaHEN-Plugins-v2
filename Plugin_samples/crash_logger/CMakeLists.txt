@@ -5,7 +5,7 @@
 
 cmake_minimum_required (VERSION 3.20)
 
-set(basename "Crash_Logger 1.00")
+set(basename "crash_logger")
 project(${basename} C CXX)
 
 set(PLUGIN_TITLE_ID "CRSH00001")

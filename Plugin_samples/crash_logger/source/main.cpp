@@ -12,7 +12,7 @@ extern "C"
 
 void sig_handler(int signo)
 {
-	printf_notification("Crash Logger v1.0 crashed with signal %d", signo);
+	printf_notification("Crash Logger v1.00 crashed with signal %d", signo);
 	exit(-1);
 }
 
