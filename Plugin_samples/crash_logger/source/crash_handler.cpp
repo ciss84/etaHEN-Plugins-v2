@@ -1,4 +1,5 @@
 #include "crash_handler.hpp"
+#include "utils.hpp"
 #include <signal.h>
 #include <string.h>
 #include <time.h>
@@ -91,12 +92,12 @@ void LogCrash(const char* title_id, int signal, void* fault_addr, void* context)
     uint64_t r10 = uc->uc_mcontext.mc_r10;
     uint64_t r11 = uc->uc_mcontext.mc_r11;
     
-    fprintf(log, "RIP: 0x%016llx    RSP: 0x%016llx\n", rip, rsp);
-    fprintf(log, "RAX: 0x%016llx    RBX: 0x%016llx\n", rax, rbx);
-    fprintf(log, "RCX: 0x%016llx    RDX: 0x%016llx\n", rcx, rdx);
-    fprintf(log, "RSI: 0x%016llx    RDI: 0x%016llx\n", rsi, rdi);
-    fprintf(log, "R8:  0x%016llx    R9:  0x%016llx\n", r8, r9);
-    fprintf(log, "R10: 0x%016llx    R11: 0x%016llx\n\n", r10, r11);
+    fprintf(log, "RIP: 0x%016lx    RSP: 0x%016lx\n", rip, rsp);
+    fprintf(log, "RAX: 0x%016lx    RBX: 0x%016lx\n", rax, rbx);
+    fprintf(log, "RCX: 0x%016lx    RDX: 0x%016lx\n", rcx, rdx);
+    fprintf(log, "RSI: 0x%016lx    RDI: 0x%016lx\n", rsi, rdi);
+    fprintf(log, "R8:  0x%016lx    R9:  0x%016lx\n", r8, r9);
+    fprintf(log, "R10: 0x%016lx    R11: 0x%016lx\n\n", r10, r11);
     
     fprintf(log, "════════════════ STACK TRACE ═══════════════════\n");
     
@@ -104,7 +105,7 @@ void LogCrash(const char* title_id, int signal, void* fault_addr, void* context)
     if (stack && rsp > 0x1000) {
         for (int i = 0; i < MAX_STACK_FRAMES; i++) {
             if ((uint64_t)&stack[i] < 0x1000) break;
-            fprintf(log, "[%02d] RSP+0x%03x: 0x%016llx\n", 
+            fprintf(log, "[%02d] RSP+0x%03x: 0x%016lx\n", 
                     i, i * 8, stack[i]);
         }
     } else {
@@ -120,14 +121,14 @@ void LogCrash(const char* title_id, int signal, void* fault_addr, void* context)
     
     fclose(log);
     
-    klog("CRASH LOGGED: %s", filename);
+    plugin_log("[CrashLogger] CRASH LOGGED: %s", filename);
 }
 
 // Handler de crash injecté dans le jeu
 void game_crash_handler(int sig, siginfo_t* si, void* context)
 {
-    klog("!!! GAME CRASH DETECTED !!!");
-    klog("Signal: %d, Fault Address: %p", sig, si->si_addr);
+    plugin_log("[CrashLogger] !!! GAME CRASH DETECTED !!!");
+    plugin_log("[CrashLogger] Signal: %d, Fault Address: %p", sig, si->si_addr);
     
     // Logger le crash
     LogCrash(g_current_title_id, sig, si->si_addr, context);
@@ -139,7 +140,7 @@ void game_crash_handler(int sig, siginfo_t* si, void* context)
 
 bool InstallCrashHandlers(pid_t pid, const char* title_id)
 {
-    klog("Installing crash handlers for PID %d (%s)", pid, title_id);
+    plugin_log("[CrashLogger] Installing crash handlers for PID %d (%s)", pid, title_id);
     
     // Sauvegarder le Title ID
     strncpy(g_current_title_id, title_id, sizeof(g_current_title_id) - 1);
@@ -161,21 +162,21 @@ bool InstallCrashHandlers(pid_t pid, const char* title_id)
         if (sigaction(signals[i], &sa, NULL) == 0)
         {
             installed++;
-            klog("Handler installed for signal %d", signals[i]);
+            plugin_log("[CrashLogger] Handler installed for signal %d", signals[i]);
         }
         else
         {
-            klog("WARNING: Failed to install handler for signal %d", signals[i]);
+            plugin_log("[CrashLogger] WARNING: Failed to install handler for signal %d", signals[i]);
         }
     }
     
     if (installed > 0)
     {
-        klog("Successfully installed %d/%zu crash handlers", 
+        plugin_log("[CrashLogger] Successfully installed %d/%zu crash handlers", 
              installed, sizeof(signals) / sizeof(signals[0]));
         return true;
     }
     
-    klog("ERROR: Failed to install any crash handlers");
+    plugin_log("[CrashLogger] ERROR: Failed to install any crash handlers");
     return false;
 }
