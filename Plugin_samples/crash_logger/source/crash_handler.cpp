@@ -77,18 +77,19 @@ void LogCrash(const char* title_id, int signal, void* fault_addr, void* context)
     fprintf(log, "════════════════ CPU REGISTERS ════════════════\n");
     
 #ifdef __x86_64__
-    uint64_t rip = uc->uc_mcontext.gregs[REG_RIP];
-    uint64_t rsp = uc->uc_mcontext.gregs[REG_RSP];
-    uint64_t rax = uc->uc_mcontext.gregs[REG_RAX];
-    uint64_t rbx = uc->uc_mcontext.gregs[REG_RBX];
-    uint64_t rcx = uc->uc_mcontext.gregs[REG_RCX];
-    uint64_t rdx = uc->uc_mcontext.gregs[REG_RDX];
-    uint64_t rsi = uc->uc_mcontext.gregs[REG_RSI];
-    uint64_t rdi = uc->uc_mcontext.gregs[REG_RDI];
-    uint64_t r8 = uc->uc_mcontext.gregs[REG_R8];
-    uint64_t r9 = uc->uc_mcontext.gregs[REG_R9];
-    uint64_t r10 = uc->uc_mcontext.gregs[REG_R10];
-    uint64_t r11 = uc->uc_mcontext.gregs[REG_R11];
+    // FreeBSD/PS5 uses direct member access, not gregs array
+    uint64_t rip = uc->uc_mcontext.mc_rip;
+    uint64_t rsp = uc->uc_mcontext.mc_rsp;
+    uint64_t rax = uc->uc_mcontext.mc_rax;
+    uint64_t rbx = uc->uc_mcontext.mc_rbx;
+    uint64_t rcx = uc->uc_mcontext.mc_rcx;
+    uint64_t rdx = uc->uc_mcontext.mc_rdx;
+    uint64_t rsi = uc->uc_mcontext.mc_rsi;
+    uint64_t rdi = uc->uc_mcontext.mc_rdi;
+    uint64_t r8 = uc->uc_mcontext.mc_r8;
+    uint64_t r9 = uc->uc_mcontext.mc_r9;
+    uint64_t r10 = uc->uc_mcontext.mc_r10;
+    uint64_t r11 = uc->uc_mcontext.mc_r11;
     
     fprintf(log, "RIP: 0x%016llx    RSP: 0x%016llx\n", rip, rsp);
     fprintf(log, "RAX: 0x%016llx    RBX: 0x%016llx\n", rax, rbx);
