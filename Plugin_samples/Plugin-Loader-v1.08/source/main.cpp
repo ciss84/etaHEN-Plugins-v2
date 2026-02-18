@@ -51,7 +51,7 @@ extern "C" {
 
 void sig_handler(int signo)
 {
-    printf_notification("Plugin Loader crashed with signal %d     ", signo);
+    printf_notification("Plugin Loader crashed with signal %d    ", signo);
     printBacktraceForCrash();
     exit(-1);
 }
@@ -458,7 +458,7 @@ int main()
         return -1;
     }
 
-    printf_notification("Plugin Loader v1.08+BP ready     \nBy @84Ciss");
+    printf_notification("Plugin Loader v1.08 started     \nBy @84Ciss ");
     plugin_log("Monitoring SceSysCore.elf (pid %d) for game launches...", syscore_pid);
 
     pid_t child_pid = -1;
