@@ -289,6 +289,28 @@ static bool IsProcessRunning(pid_t pid)
 
 uintptr_t kernel_base = 0;
 
+// Returns sandbox_id built from title_id + highest sandbox number.
+// sandbox_id must be at least 32 bytes.
+static bool resolve_sandbox_id(const char *title_id, char *sandbox_id, size_t sandbox_id_size)
+{
+    // Retry until sandbox directory appears (game creates it right after exec).
+    int sandbox_num = -1;
+    for (int attempt = 0; attempt < 20 && sandbox_num < 0; attempt++) {
+        sandbox_num = find_highest_sandbox_number(title_id);
+        if (sandbox_num < 0)
+            usleep(50000); // 50ms
+    }
+
+    if (sandbox_num < 0) {
+        plugin_log("[Sandbox] No sandbox found for %s after 1s", title_id);
+        return false;
+    }
+
+    snprintf(sandbox_id, sandbox_id_size, "%s_%03d", title_id, sandbox_num);
+    plugin_log("[Sandbox] Resolved: %s", sandbox_id);
+    return true;
+}
+
 static void inject_into_game(pid_t pid, const char *title_id,
                               const std::vector<PRXConfig> &prx_list)
 {
@@ -296,25 +318,44 @@ static void inject_into_game(pid_t pid, const char *title_id,
     plugin_log("Injecting into %s (pid %d)", title_id, pid);
     plugin_log("========================================");
 
-    // ── Build sandbox_id for fakelib ──────────────────────────────────────
-    int  sandbox_num = find_highest_sandbox_number(title_id);
+    // ── 1. FAKELIB FIRST — must be mounted before game loads its libs ─────
+    //    The dynamic linker runs right after exec, so we have very little time.
     char sandbox_id[32] = {};
-    if (sandbox_num >= 0)
-        snprintf(sandbox_id, sizeof(sandbox_id), "%s_%03d", title_id, sandbox_num);
+    char *fakelib_mount = nullptr;
 
-    // ── Wait a bit for process init ───────────────────────────────────────
-    plugin_log("Waiting for process initialization...");
+    if (resolve_sandbox_id(title_id, sandbox_id, sizeof(sandbox_id))) {
+        // Wait for app0/fakelib to be visible (sandbox is being set up)
+        char fakelib_check[PATH_MAX];
+        snprintf(fakelib_check, sizeof(fakelib_check),
+                 "/mnt/sandbox/%s/app0/fakelib", sandbox_id);
+
+        struct stat st;
+        for (int t = 0; t < 30 && stat(fakelib_check, &st) != 0; t++)
+            usleep(50000); // up to 1.5s
+
+        if (stat(fakelib_check, &st) == 0) {
+            plugin_log("[Fakelib] app0/fakelib found, mounting NOW");
+            fakelib_mount = try_mount_fakelib(title_id, sandbox_id);
+            if (!fakelib_mount)
+                plugin_log("[Fakelib] mount failed");
+        } else {
+            plugin_log("[Fakelib] No app0/fakelib for %s, skipping", title_id);
+        }
+    }
+
+    // ── 2. Wait a bit for process to reach a hookable state ───────────────
+    plugin_log("[PLT] Waiting for process initialization...");
     int alive = 0;
     for (int i = 0; i < 10; i++) {
-        usleep(100000);
+        usleep(100000); // 100ms × 10 = 1s
         if (IsProcessRunning(pid)) alive++;
     }
-    plugin_log("Process alive: %d/10 checks", alive);
+    plugin_log("[PLT] Process alive: %d/10 checks", alive);
 
-    // ── PLT Hook (Plugin Loader) ──────────────────────────────────────────
+    // ── 3. PLT Hook (Plugin Loader) ───────────────────────────────────────
     UniquePtr<Hijacker> hijacker = Hijacker::getHijacker(pid);
     if (!hijacker) {
-        plugin_log("First Hijacker attempt failed, retrying in 1s...");
+        plugin_log("[PLT] First Hijacker attempt failed, retrying in 1s...");
         sleep(1);
         hijacker = Hijacker::getHijacker(pid);
     }
@@ -323,7 +364,7 @@ static void inject_into_game(pid_t pid, const char *title_id,
 
     if (hijacker) {
         uint64_t text_base = hijacker->getEboot()->imagebase();
-        plugin_log("Hijacker OK - text_base: 0x%llx", text_base);
+        plugin_log("[PLT] Hijacker OK - text_base: 0x%llx", text_base);
 
         // Suspend before injection
         sceKernelPrepareToSuspendProcess(pid);
@@ -331,13 +372,12 @@ static void inject_into_game(pid_t pid, const char *title_id,
         usleep(500000);
 
         for (const auto &prx : prx_list) {
-            plugin_log("Injecting PRX: %s (delay: %d)", prx.path.c_str(), prx.frame_delay);
+            plugin_log("[PLT] Injecting: %s (delay: %d)", prx.path.c_str(), prx.frame_delay);
 
             if (HookGame(hijacker, text_base, prx.path.c_str(), false, prx.frame_delay)) {
-                plugin_log("SUCCESS: %s", prx.path.c_str());
+                plugin_log("[PLT] SUCCESS: %s", prx.path.c_str());
                 success_count++;
 
-                // Resume so the PRX can load, then re-suspend for next one
                 sceKernelPrepareToResumeProcess(pid);
                 sceKernelResumeProcess(pid);
 
@@ -348,7 +388,7 @@ static void inject_into_game(pid_t pid, const char *title_id,
                     usleep(500000);
                 }
             } else {
-                plugin_log("FAILED: %s", prx.path.c_str());
+                plugin_log("[PLT] FAILED: %s", prx.path.c_str());
             }
         }
 
@@ -357,19 +397,18 @@ static void inject_into_game(pid_t pid, const char *title_id,
         sceKernelPrepareToResumeProcess(pid);
         sceKernelResumeProcess(pid);
 
-        plugin_log("PLT injection: %d/%zu PRX loaded", success_count, prx_list.size());
-        printf_notification("%d/%zu PRX injected into %s     ", success_count, prx_list.size(), title_id);
+        plugin_log("[PLT] %d/%zu PRX injected", success_count, prx_list.size());
+        printf_notification("%d/%zu PRX injected into %s     \nFakelib: %s",
+                            success_count, prx_list.size(), title_id,
+                            fakelib_mount ? "OK" : "none");
     } else {
-        plugin_log("FAILED to create Hijacker for pid %d", pid);
+        plugin_log("[PLT] FAILED to create Hijacker for pid %d", pid);
+        printf_notification("PLT hook failed for %s     \nFakelib: %s",
+                            title_id, fakelib_mount ? "OK" : "none");
     }
 
-    // ── Fakelib (backpork) — runs on top of PLT hook if present ──────────
-    char *fakelib_mount = nullptr;
-    if (sandbox_num >= 0 && sandbox_id[0] != '\0')
-        fakelib_mount = try_mount_fakelib(title_id, sandbox_id);
-
-    // ── Wait for game exit then cleanup ───────────────────────────────────
-    plugin_log("Waiting for game (pid %d) to exit...", pid);
+    // ── 4. Wait for game exit then cleanup fakelib ────────────────────────
+    plugin_log("[Wait] Waiting for game (pid %d) to exit...", pid);
     wait_for_pid_exit(pid);
 
     if (fakelib_mount)
@@ -466,20 +505,28 @@ int main()
             auto it = config.games.find(std::string(title_id));
 
             if (it == config.games.end()) {
-                plugin_log("No config for %s - skipping PLT injection (fakelib may still apply)", title_id);
-                // Still try fakelib even with no PRX config
-                int  sn = find_highest_sandbox_number(title_id);
-                if  (sn >= 0) {
-                    char sid[32];
-                    snprintf(sid, sizeof(sid), "%s_%03d", title_id, sn);
-                    char *fml = try_mount_fakelib(title_id, sid);
-                    if  (fml) {
-                        pid_t game_pid = child_pid;
-                        wait_for_pid_exit(game_pid);
-                        cleanup_after_game(game_pid, sid, fml);
-                    }
+                plugin_log("No PLT config for %s - fakelib only", title_id);
+
+                // Mount fakelib ASAP even without PRX config
+                char sid[32] = {};
+                char *fml = nullptr;
+                if (resolve_sandbox_id(title_id, sid, sizeof(sid))) {
+                    char fakelib_check[PATH_MAX];
+                    snprintf(fakelib_check, sizeof(fakelib_check),
+                             "/mnt/sandbox/%s/app0/fakelib", sid);
+                    struct stat st2;
+                    for (int t = 0; t < 30 && stat(fakelib_check, &st2) != 0; t++)
+                        usleep(50000);
+                    if (stat(fakelib_check, &st2) == 0)
+                        fml = try_mount_fakelib(title_id, sid);
                 }
+
+                pid_t game_pid = child_pid;
                 child_pid = -1;
+                if (fml) {
+                    wait_for_pid_exit(game_pid);
+                    cleanup_after_game(game_pid, sid, fml);
+                }
                 continue;
             }
 
