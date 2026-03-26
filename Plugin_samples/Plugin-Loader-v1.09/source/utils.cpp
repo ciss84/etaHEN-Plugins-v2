@@ -239,7 +239,7 @@ GameInjectorConfig parse_injector_config()
 					}
 
 					// Build full path
-					std::string full_path = "/data/etaHEN/plugins/" + prx_file;
+					std::string full_path = "/data/etaHEN/prx" + prx_file;
 
 					PRXConfig prx;
 					prx.path = full_path;
