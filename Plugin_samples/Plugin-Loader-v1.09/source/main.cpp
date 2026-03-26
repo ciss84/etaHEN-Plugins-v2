@@ -347,7 +347,7 @@ static void inject_into_game(pid_t pid, const char *title_id,
     plugin_log("[PLT] Waiting for process initialization...");
     int alive = 0;
     for (int i = 0; i < 10; i++) {
-        usleep(100000); // 100ms × 10 = 1s
+        usleep(75000); // 100ms × 10 = 1s
         if (IsProcessRunning(pid)) alive++;
     }
     plugin_log("[PLT] Process alive: %d/10 checks", alive);
@@ -385,7 +385,7 @@ static void inject_into_game(pid_t pid, const char *title_id,
                     sleep(3);
                     sceKernelPrepareToSuspendProcess(pid);
                     sceKernelSuspendProcess(pid);
-                    usleep(600000); //500000
+                    usleep(500000);
                 }
             } else {
                 plugin_log("[PLT] FAILED: %s", prx.path.c_str());
