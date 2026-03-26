@@ -8,7 +8,7 @@
 void write_log(const char* text)
 {
 	int text_len = strlen(text);
-	int fd = open("/data/etaHEN/plugins/PluginLoader.log", O_WRONLY | O_CREAT | O_APPEND, 0777);
+	int fd = open("/data/etaHEN/PluginLoader.log", O_WRONLY | O_CREAT | O_APPEND, 0777);
 	if (fd < 0)
 	{
 		return;
@@ -158,10 +158,10 @@ GameInjectorConfig parse_injector_config()
 	GameInjectorConfig config;
 
 	// Use POSIX open instead of std::ifstream for PS5 compatibility
-	int fd = open("/data/etaHEN/plugins/PluginLoader.ini", O_RDONLY);
+	int fd = open("/data/etaHEN/PluginLoader.ini", O_RDONLY);
 	if (fd < 0)
 	{
-		plugin_log("No PluginLoader.ini found at /data/etaHEN/plugins/PluginLoader.ini");
+		plugin_log("No PluginLoader.ini found at /data/etaHEN/PluginLoader.ini");
 		return config;
 	}
 
