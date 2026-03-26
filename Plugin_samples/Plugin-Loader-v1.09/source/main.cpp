@@ -385,7 +385,7 @@ static void inject_into_game(pid_t pid, const char *title_id,
                     sleep(3);
                     sceKernelPrepareToSuspendProcess(pid);
                     sceKernelSuspendProcess(pid);
-                    usleep(750000); //500000
+                    usleep(600000); //500000
                 }
             } else {
                 plugin_log("[PLT] FAILED: %s", prx.path.c_str());
