@@ -369,8 +369,9 @@ static void inject_into_game(pid_t pid, const char *title_id,
         // Suspend before injection
         sceKernelPrepareToSuspendProcess(pid);
         sceKernelSuspendProcess(pid);
-        usleep(500000);
-
+        //usleep(500000);
+        usleep(750000);
+        
         for (const auto &prx : prx_list) {
             plugin_log("[PLT] Injecting: %s (delay: %d)", prx.path.c_str(), prx.frame_delay);
 
@@ -386,7 +387,7 @@ static void inject_into_game(pid_t pid, const char *title_id,
                     sceKernelPrepareToSuspendProcess(pid);
                     sceKernelSuspendProcess(pid);
                     //usleep(500000);
-                    usleep(3000000);
+                    usleep(750000);
                 }
             } else {
                 plugin_log("[PLT] FAILED: %s", prx.path.c_str());
