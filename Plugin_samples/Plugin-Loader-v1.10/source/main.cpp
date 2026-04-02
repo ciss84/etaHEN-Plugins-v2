@@ -181,7 +181,6 @@ static char *try_mount_fakelib(const char *title_id, const char *sandbox_id)
     }
 
     plugin_log("[Fakelib] Mounted %s -> %s", fakelib_src, mount_dst);
-    printf_notification("Fakelib mounted for %s     ", title_id);
     return mount_dst;
 }
 
