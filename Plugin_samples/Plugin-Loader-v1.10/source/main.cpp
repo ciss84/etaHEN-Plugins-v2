@@ -323,7 +323,9 @@ static void inject_into_game(pid_t pid, const char *title_id,
     char sandbox_id[32] = {};
     char *fakelib_mount = nullptr;
 
-    if (resolve_sandbox_id(title_id, sandbox_id, sizeof(sandbox_id))) {
+    // Fakelib (unionfs) = PS5 native apps only (PPSA), skip for CUSA/SCUS BC titles
+    if (strncmp(title_id, "PPSA", 4) == 0 &&
+        resolve_sandbox_id(title_id, sandbox_id, sizeof(sandbox_id))) {
         // Wait for app0/fakelib to be visible (sandbox is being set up)
         char fakelib_check[PATH_MAX];
         snprintf(fakelib_check, sizeof(fakelib_check),
@@ -510,9 +512,11 @@ int main()
                 plugin_log("No PLT config for %s - fakelib only", title_id);
 
                 // Mount fakelib ASAP even without PRX config
+                // Fakelib (unionfs) = PS5 native apps only (PPSA), skip for CUSA/SCUS BC titles
                 char sid[32] = {};
                 char *fml = nullptr;
-                if (resolve_sandbox_id(title_id, sid, sizeof(sid))) {
+                if (strncmp(title_id, "PPSA", 4) == 0 &&
+                    resolve_sandbox_id(title_id, sid, sizeof(sid))) {
                     char fakelib_check[PATH_MAX];
                     snprintf(fakelib_check, sizeof(fakelib_check),
                              "/mnt/sandbox/%s/app0/fakelib", sid);
