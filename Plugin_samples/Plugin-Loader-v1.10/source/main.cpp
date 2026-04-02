@@ -402,13 +402,20 @@ static void inject_into_game(pid_t pid, const char *title_id,
         sceKernelResumeProcess(pid);
 
         plugin_log("[PLT] %d/%zu PRX injected", success_count, prx_list.size());
-        printf_notification("%d/%zu PRX injected into %s     \nFakelib: %s",
-                            success_count, prx_list.size(), title_id,
-                            fakelib_mount ? "OK" : "none");
+        if (strncmp(title_id, "PPSA", 4) == 0)
+            printf_notification("%d/%zu PRX injected into %s     \nFakelib: %s",
+                                success_count, prx_list.size(), title_id,
+                                fakelib_mount ? "OK" : "none");
+        else
+            printf_notification("%d/%zu PRX injected into %s     ",
+                                success_count, prx_list.size(), title_id);
     } else {
         plugin_log("[PLT] FAILED to create Hijacker for pid %d", pid);
-        printf_notification("PLT hook failed for %s     \nFakelib: %s",
-                            title_id, fakelib_mount ? "OK" : "none");
+        if (strncmp(title_id, "PPSA", 4) == 0)
+            printf_notification("PLT hook failed for %s     \nFakelib: %s",
+                                title_id, fakelib_mount ? "OK" : "none");
+        else
+            printf_notification("PLT hook failed for %s     ", title_id);
     }
 
     // ── 4. Wait for game exit then cleanup fakelib ────────────────────────
