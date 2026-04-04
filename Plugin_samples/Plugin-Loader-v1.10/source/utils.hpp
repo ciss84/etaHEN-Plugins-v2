@@ -236,6 +236,7 @@ struct PRXConfig {
 
 struct GameInjectorConfig {
 	std::map<std::string, std::vector<PRXConfig>> games;
+	std::map<std::string, bool> fakelib_enabled; // default true si absent
 };
 
 void plugin_log(const char* fmt, ...);

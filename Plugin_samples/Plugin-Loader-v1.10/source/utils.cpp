@@ -220,6 +220,20 @@ GameInjectorConfig parse_injector_config()
 					current_tid = line.substr(1, line.length()-2);
 					plugin_log("Config: Found section [%s]", current_tid.c_str());
 				}
+				// fakelib flag
+				else if (!current_tid.empty() && line.find("fakelib") == 0)
+				{
+					size_t eq = line.find('=');
+					if (eq != std::string::npos)
+					{
+						std::string val = line.substr(eq + 1);
+						size_t vs = val.find_first_not_of(" \t");
+						if (vs != std::string::npos) val = val.substr(vs);
+						bool enabled = !(val == "false" || val == "0");
+						config.fakelib_enabled[current_tid] = enabled;
+						plugin_log("Config: [%s] fakelib = %s", current_tid.c_str(), enabled ? "true" : "false");
+					}
+				}
 				// PRX line
 				else if (!current_tid.empty())
 				{

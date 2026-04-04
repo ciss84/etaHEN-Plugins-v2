@@ -311,7 +311,8 @@ static bool resolve_sandbox_id(const char *title_id, char *sandbox_id, size_t sa
 }
 
 static void inject_into_game(pid_t pid, const char *title_id,
-                              const std::vector<PRXConfig> &prx_list)
+                              const std::vector<PRXConfig> &prx_list,
+                              const GameInjectorConfig &config)
 {
     plugin_log("========================================");
     plugin_log("Injecting into %s (pid %d)", title_id, pid);
@@ -322,7 +323,12 @@ static void inject_into_game(pid_t pid, const char *title_id,
     char sandbox_id[32] = {};
     char *fakelib_mount = nullptr;
 
-    if (strncmp(title_id, "PPSA", 4) == 0 && resolve_sandbox_id(title_id, sandbox_id, sizeof(sandbox_id))) {
+    // Fakelib = PPSA only + peut etre desactive via "fakelib = false" dans le INI
+    auto fakelib_cfg = config.fakelib_enabled.find(std::string(title_id));
+    bool fakelib_wanted = (strncmp(title_id, "PPSA", 4) == 0) &&
+                          (fakelib_cfg == config.fakelib_enabled.end() || fakelib_cfg->second);
+
+    if (fakelib_wanted && resolve_sandbox_id(title_id, sandbox_id, sizeof(sandbox_id))) {
         // Wait for app0/fakelib to be visible (sandbox is being set up)
         char fakelib_check[PATH_MAX];
         snprintf(fakelib_check, sizeof(fakelib_check),
@@ -399,7 +405,7 @@ static void inject_into_game(pid_t pid, const char *title_id,
         sceKernelResumeProcess(pid);
 
         plugin_log("[PLT] %d/%zu PRX injected", success_count, prx_list.size());
-        if (strncmp(title_id, "PPSA", 4) == 0)
+        if (fakelib_wanted)
             printf_notification("%d/%zu PRX injected into %s     \nFakelib: %s",
                                 success_count, prx_list.size(), title_id,
                                 fakelib_mount ? "OK" : "none");
@@ -408,7 +414,7 @@ static void inject_into_game(pid_t pid, const char *title_id,
                                 success_count, prx_list.size(), title_id);
     } else {
         plugin_log("[PLT] FAILED to create Hijacker for pid %d", pid);
-        if (strncmp(title_id, "PPSA", 4) == 0)
+        if (fakelib_wanted)
             printf_notification("PLT hook failed for %s     \nFakelib: %s",
                                 title_id, fakelib_mount ? "OK" : "none");
         else
@@ -518,7 +524,10 @@ int main()
                 // Mount fakelib ASAP even without PRX config
                 char sid[32] = {};
                 char *fml = nullptr;
-                if (strncmp(title_id, "PPSA", 4) == 0 && resolve_sandbox_id(title_id, sid, sizeof(sid))) {
+                auto fml_cfg = config.fakelib_enabled.find(std::string(title_id));
+                bool fml_wanted = (strncmp(title_id, "PPSA", 4) == 0) &&
+                                  (fml_cfg == config.fakelib_enabled.end() || fml_cfg->second);
+                if (fml_wanted && resolve_sandbox_id(title_id, sid, sizeof(sid))) {
                     char fakelib_check[PATH_MAX];
                     snprintf(fakelib_check, sizeof(fakelib_check),
                              "/mnt/sandbox/%s/app0/fakelib", sid);
@@ -542,7 +551,7 @@ int main()
             pid_t game_pid = child_pid;
             child_pid = -1;
 
-            inject_into_game(game_pid, title_id, it->second);
+            inject_into_game(game_pid, title_id, it->second, config);
         }
     }
 
