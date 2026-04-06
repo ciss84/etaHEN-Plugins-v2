@@ -170,19 +170,19 @@ namespace offsets {
             case V400: case V402: case V403: case V450: case V451:
                 return 0x6506498;
             case V500: case V502: case V510: case V550:
-                return 0x6241098; //0x6241098
+                return 0x6646710; // 0x6241098
             case V600: case V602: case V650:
-                return 0x65968EC + 0x24;
+                return 0x6596910;
             case V700: case V701: case V720: case V740: case V760: case V761:
                 return 0x0AC8088;
             case V800: case V820: case V840: case V860:
-                return 0x0AC3088; //0x0AC3064 + 0x24
+                return 0x0AC3088;
             case V900:
-                return 0x0D72088; //0x0D72064 + 0x24
+                return 0x0D72088;
             case V905: case V920: case V940: case V960:
-                return 0x0D73088; //0x0D73064 + 0x24
+                return 0x0D73088;
             case V1000: case V1001: case V1020: case V1040: case V1060:
-                return 0x0D79088; //0x0D79064 + 0x24
+                return 0x0D79088;
             default:
                 printf("Unsupported firmware version: 0x%x\n", getSystemSwVersion() & VERSION_MASK);
                 return -1;
@@ -200,19 +200,19 @@ namespace offsets {
             case V400: case V402: case V403: case V450: case V451:
                 return 0x6506500;
             case V500: case V502: case V510: case V550: 
-                return 0x6646710; //qa flags offset
+                return 0x6646778; //qa flags offset 0x6646710
             case V600: case V602: case V650:
-                return 0x65968EC + 0x8C;
+                return 0x6596978;
             case V700: case V701: case V720: case V740: case V760: case V761:
                 return 0x0AC80F0;
             case V800: case V820: case V840: case V860:
-                return 0x0AC30F0; //0x0AC3064 + 0x8C
+                return 0x0AC30F0;
             case V900:
-                return 0x0D720F0; //0x0D72064 + 0x8C
+                return 0x0D720F0;
             case V905: case V920: case V940: case V960:
-                return 0x0D730F0; //0x0D73064 + 0x8C
+                return 0x0D730F0;
             case V1000: case V1001: case V1020: case V1040: case V1060:
-                return 0x0D790F0; //0x0D79064 + 0x8C
+                return 0x0D790F0;
             default:
                 printf("Unsupported firmware version: 0x%x\n", getSystemSwVersion() & VERSION_MASK);
                 return -1;
