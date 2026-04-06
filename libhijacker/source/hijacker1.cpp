@@ -87,8 +87,8 @@ void Hijacker::jailbreak(bool escapeSandbox) const {
 
 	if (escapeSandbox) {
 		// Escape sandbox - Récupérer et réinitialiser le vnode root depuis le kernel
-		//memset(rootvnode_area_store.get(), 0, 0x100);
-		//kernel_copyout(kernel_base + offsets::root_vnode(), rootvnode_area_store.get(), 0x100);
+		memset(rootvnode_area_store.get(), 0, 0x100);
+		kernel_copyout(kernel_base + offsets::root_vnode(), rootvnode_area_store.get(), 0x100);
 		
 		// Copier le vnode root dans fd_rdir et fd_jdir
 		copyin(fd + 0x10, rootvnode_area_store.get(), 0x8);  // fd_rdir
